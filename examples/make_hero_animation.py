@@ -270,16 +270,6 @@ def render(i, path):
     # captions
     fig.text(0.035, 0.92, "HYDAR", color="white", fontsize=22, weight="bold", family="DejaVu Sans")
     fig.text(0.035, 0.875, "Hydrodynamic Detection and Ranging", color="#9fb3d9", fontsize=10)
-    if t < T_IMPACT:
-        cap = "drone drops a sphere"
-    elif t < T_IMPACT + max(arrivals) + 0.3:
-        cap = "surface waves reach the sensor arrays"
-    elif t < T_LASER + 1.7:
-        cap = "time of flight → bearing and range"
-    else:
-        cap = f"HYDAR fix: {err_cm:.0f} cm from the true drop point"
-    col = RED if t > T_LASER + 1.7 else "#c9d6f0"
-    fig.text(0.035, 0.06, cap, color=col, fontsize=11)
     fig.savefig(path, facecolor=BG)
     plt.close(fig)
 

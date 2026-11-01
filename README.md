@@ -15,6 +15,8 @@ This repository contains a self-contained Python simulator for developing and te
 
 *A 0.5 m stone sphere is dropped at (11, 17) m. Four 3 × 3 arrays at different depths each estimate a bearing (dashed lines) and a time-of-flight range. The fused HYDAR fix lands within 4 cm of the true point.*
 
+**Created by Jeff Tuhtan** · GitHub [@jtuhtan](https://github.com/jtuhtan) · see [Author and contact](#author-and-contact)
+
 ---
 
 ## Quick start
@@ -147,6 +149,15 @@ examples/       runnable scripts (01 to 03)
 tests/          pytest suite
 docs/img/       figures used in this README
 ```
+
+## Author and contact
+
+HYDAR was conceived and created by **Jeff Tuhtan**.
+
+* GitHub: [@jtuhtan](https://github.com/jtuhtan)
+* Questions, ideas and bug reports: please [open an issue](https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging/issues)
+
+If you use HYDAR in your work, please credit the author and link to this repository.
 
 ## Reference
 

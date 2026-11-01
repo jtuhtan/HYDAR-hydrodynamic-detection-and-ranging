@@ -7,6 +7,7 @@ name = "hydar"
 version = "0.1.0"
 description = "HYDAR: Hydrodynamic Detection and Ranging. Locate objects dropped into water from surface-wave pressure signals."
 readme = "README.md"
+authors = [{ name = "Jeff Tuhtan" }]
 requires-python = ">=3.9"
 dependencies = ["numpy>=1.22", "scipy>=1.8", "matplotlib>=3.5"]
 
@@ -15,3 +16,7 @@ test = ["pytest"]
 
 [tool.setuptools]
 packages = ["hydar"]
+
+[project.urls]
+Homepage = "https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging"
+Issues = "https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging/issues"
