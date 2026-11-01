@@ -11,9 +11,9 @@ This repository contains a self-contained Python simulator for developing and te
 3. **pressure sensor arrays** (for example 3 × 3 sensors at 1 m spacing) placed at any x, y and depth z, sampling at 100 Hz,
 4. the **HYDAR localization** step: bearing from time differences of arrival, range from time of flight, and fusion across arrays.
 
-![HYDAR example](docs/img/hydar_map.png)
+<p align="center"><img src="docs/img/fig04_hydar_map.png" alt="HYDAR localization map" width="420"></p>
 
-*A 0.5 m stone sphere is dropped at (11, 17) m. Four 3 × 3 arrays at different depths each estimate a bearing (dashed lines) and a time-of-flight range. The fused HYDAR fix lands within 4 cm of the true point.*
+*A 0.5 m stone sphere is dropped at (11, 17) m in 1 m deep water; the colours show the surface elevation η 3 s later. Four 3 × 3 arrays (A to D, 1 m spacing, at depths of 0.2 to 0.8 m) each estimate a bearing and a time-of-flight range (dashed lines). The fused HYDAR fix (red cross) lands 4 cm from the true drop point (open circle).*
 
 **Created by Jeff Tuhtan** · GitHub [@jtuhtan](https://github.com/jtuhtan) · see [Author and contact](#author-and-contact)
 
@@ -66,12 +66,19 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 | `examples/02_drop_sphere.py` | A floating sphere (600 kg/m³) heaves and settles at its Archimedes draft. A sinking one (2500 kg/m³) falls to the bottom. Both radiate rings of waves. |
 | `examples/03_hydar_localization.py` | The full HYDAR pipeline with four arrays, both with a known drop time and with an unknown one. |
 | `examples/make_hero_animation.py` | Renders the animation at the top of this page from a real simulation (needs ffmpeg, about 5 minutes). The waves, arrival times and the final fix are all computed by `hydar`; the drone and splash are decoration. |
+| `docs/make_figures.py` | Regenerates the four figures below (PNG at 600 dpi, plus editable PDF and SVG) in the author's paper figure style (`docs/paperfig.py`), sized for a 170 mm text width. |
 
-![open boundary](docs/img/open_boundary.png)
-![drop sphere](docs/img/drop_sphere.png)
-![time series](docs/img/hydar_timeseries.png)
+![Figure 1](docs/img/fig01_open_boundary.png)
 
-*Pressure time series at 100 Hz from the four arrays in example 3. The thin vertical lines are the picked arrival times.*
+**Figure 1.** Non-reflecting walls. **a–c**, a 1 cm Gaussian hump of water in a 20 m × 12 m, 1 m deep domain spreads out and leaves through the perfectly matched layer. **d**, wave energy left in the domain, relative to the start: it stays at 1 with rigid walls and falls below 10⁻⁴ with the PML.
+
+![Figure 2](docs/img/fig02_drop_sphere.png)
+
+**Figure 2.** Drop objects. A 0.2 m sphere is released 5 cm above 0.5 m deep water. **a**, a floating sphere (600 kg/m³) keeps radiating rings as it bobs; **b**, a sinking sphere (2500 kg/m³) makes a single ring. **c**, height of the sphere's lowest point: the floating sphere settles at its Archimedes draft (dashed), the sinking sphere stops on the bottom. **d**, surface elevation at the wave gauge 1 m from the drop (triangle in a and b).
+
+![Figure 3](docs/img/fig03_hydar_timeseries.png)
+
+**Figure 3.** Dynamic pressure recorded at 100 Hz by the nine sensors of each array (**a–d** = arrays A–D) for the drop in the map above. The shaded band spans the first to the last picked arrival across each array; this spread in arrival time gives the bearing, and the arrival time at the array centre gives the range.
 
 ---
 
