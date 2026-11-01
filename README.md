@@ -66,6 +66,7 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 | `examples/02_drop_sphere.py` | A floating sphere (600 kg/m³) heaves and settles at its Archimedes draft. A sinking one (2500 kg/m³) falls to the bottom. Both radiate rings of waves. |
 | `examples/03_hydar_localization.py` | The full HYDAR pipeline with four arrays, both with a known drop time and with an unknown one. |
 | `examples/04_boat_tracking.py` | Case study 2: a 4.5 m Series 60 boat crosses the domain at 5 m/s, and HYDAR tracks it from its wake (about 1 minute). |
+| `examples/make_boat_animation.py` | Renders the case study 2 animation from a real simulation (needs ffmpeg, about 5 minutes). The red lasers end where the fitted HYDAR track places the boat at the moment each array first detects its wake. |
 | `examples/make_hero_animation.py` | Renders the animation at the top of this page from a real simulation (needs ffmpeg, about 5 minutes). The waves, arrival times and the final fix are all computed by `hydar`; the drone and splash are decoration. |
 | `docs/make_figures.py` | Regenerates the four figures below (PNG at 600 dpi, plus editable PDF and SVG) in the author's paper figure style (`docs/paperfig.py`), sized for a 170 mm text width. |
 
@@ -84,6 +85,8 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 ---
 
 ## Case study 2: tracking a small boat
+
+<p align="center"><img src="docs/img/hydar_boat.gif" alt="A Series 60 boat crosses the domain, its V-shaped wake washes over the four arrays, and red lasers trace the HYDAR track" width="720"></p>
 
 A 4.5 m boat with a **Series 60** hull (beam 0.60 m, draft 0.24 m, 389 L displacement) runs at 5 m/s on a heading of 10° through 1 m deep water. The shallow-water wave speed is √(gh) = 3.13 m/s, so the boat is faster than its own waves (depth Froude number Fr = 1.6) and drags a V-shaped wake. The same four 3 × 3 arrays record the wake at 100 Hz. From the wake arrival times alone, HYDAR recovers the boat's speed (5.04 m/s), heading (9.6°) and track, staying within 0.3 m of the bow along the whole crossing.
 
