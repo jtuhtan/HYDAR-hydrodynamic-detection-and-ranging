@@ -203,8 +203,112 @@ def fig_map(sim, arrays, ball, snap, res):
     pf.save(fig, "fig04_hydar_map", outdir=OUT)
 
 
+# ------------------------------------------------------------------ fig 5 + 6 (boat)
+def fig_hull():
+    from hydar.boat import Series60Hull
+    hull = Series60Hull(length=4.5)
+    co = hull.coefficients()
+    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 46 * pf.MM))
+    gs = fig.add_gridspec(1, 2, width_ratios=[2.0, 1])
+    a, b = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1])
+
+    L, B, T = hull.length, hull.beam, hull.draft
+    x = np.linspace(-L / 2, L / 2, 900)
+    y = np.linspace(0, B / 2, 300)
+    XX, YY = np.meshgrid(x, y, indexing="ij")
+    D = hull.depth(2 * XX / L, YY)
+    # half-breadth plan: waterlines at constant depth below the design waterline
+    levels = [0.001, 0.25, 0.5, 0.75, 0.95]
+    for lev, shade in zip(levels, ["#1A1A1A", "#404040", "#666666", "#8C8C8C", "#B3B3B3"]):
+        a.contour(x, y * 100, D.T, levels=[lev * T], colors=shade, linewidths=0.8)
+    a.set(xlabel="Distance from midships (m)", ylabel="Half-breadth (cm)",
+          xlim=(-L / 2 - 0.05, L / 2 + 0.05), ylim=(0, 34), yticks=[0, 10, 20, 30])
+    a.text(L / 2, 31, "Bow", ha="right", va="bottom", fontsize=7.5)
+    a.text(-L / 2, 31, "Stern", ha="left", va="bottom", fontsize=7.5)
+
+    # body plan: stations 0 (stern) .. 10 (bow); aft half on the left, fore half on the right
+    yy = np.linspace(0, B / 2, 200)
+    for st in range(11):
+        xi = -1 + st / 5
+        if st in (0, 10):
+            continue
+        z = -hull.depth(np.full_like(yy, xi), yy)
+        side = -1 if st < 5 else 1
+        col = C["ink"] if st == 5 else (C["dark"] if st < 5 else C["blue"])
+        b.plot(side * yy * 100, z * 100, color=col, lw=0.9)
+        if st == 5:
+            b.plot(-yy * 100, z * 100, color=col, lw=0.9)
+    b.axvline(0, color=C["grid"], lw=0.6, zorder=0)
+    b.set(xlabel="Half-breadth (cm)", ylabel="z (cm)", xlim=(-33, 33), ylim=(-27, 1),
+          xticks=[-30, -15, 0, 15, 30])
+    b.set_aspect("equal")
+    for xx, txt, col, ha in ((-16, "Aft body", C["dark"], "center"), (16, "Fore body", C["blue"], "center")):
+        b.annotate(txt, (xx, 1), xycoords=("data", "axes fraction"), xytext=(0, 3),
+                   textcoords="offset points", ha=ha, va="bottom", fontsize=7.5, color=col,
+                   annotation_clip=False)
+    pf.panel_labels([a, b])
+    pf.save(fig, "fig05_series60_hull", outdir=OUT)
+
+
+def boat_scene():
+    from hydar import Boat, track_boat, wake_arrival
+    from hydar.boat import Series60Hull
+    grid = Grid(lx=40.0, ly=30.0, dx=0.05, n_pml=60)
+    sim = Solver(grid, depth=1.0)
+    arrays = [SensorArray("A", 10.0, 4.0, z=-0.3), SensorArray("B", 28.0, 5.0, z=-0.5),
+              SensorArray("C", 12.0, 25.0, z=-0.5), SensorArray("D", 31.0, 25.0, z=-0.8)]
+    for a in arrays:
+        sim.add(a)
+    boat = Boat(hull=Series60Hull(4.5), speed=5.0, x=-2.5, y=12.0, heading_deg=10.0)
+    sim.add(boat)
+    sim.run(5.0)
+    snap = sim.eta[grid.interior].copy()
+    sim.run(12.0)
+    tr = track_boat(arrays, c=sim.c)
+    pred = [wake_arrival(a.positions, tr.p0, tr.heading_deg, tr.speed, sim.c) for a in arrays]
+    return sim, arrays, boat, snap, tr, pred
+
+
+def fig_boat(sim, arrays, boat, snap, tr, pred):
+    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 70 * pf.MM))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.75, 1])
+    a, b = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1])
+    v = np.percentile(np.abs(snap), 99.8)
+    m = field(a, sim, snap, v)
+    tt = np.linspace(-1, 10, 50)
+    bow = boat.position(np.clip(tt, 0, None)) + 0.5 * boat.length * boat.e
+    a.plot(*bow.T, color=C["ink"], lw=0.9, label="True track (bow)")
+    a.plot(*tr.position(tt).T, color=C["red"], lw=1.2, ls="--", label="HYDAR track")
+    for arr in arrays:
+        a.plot(*arr.positions.T, "s", color=C["ink"], ms=1.6)
+        left = arr.x < 20
+        a.annotate(arr.name, (arr.positions[:, 0].min() if left else arr.positions[:, 0].max(), arr.y),
+                   xytext=(-5 if left else 5, 0), textcoords="offset points",
+                   ha="right" if left else "left", va="center", fontsize=7.5)
+    a.set(xlabel="x (m)", ylabel="y (m)", xlim=(0, 40), ylim=(0, 30), xticks=[0, 10, 20, 30, 40],
+          yticks=[0, 10, 20, 30])
+    a.set_aspect("equal")
+    pf.colorbar(fig, m, a, "η (mm)")
+    a.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, fontsize=7, frameon=False,
+             borderaxespad=0.2)
+
+    b.grid(True)
+    for k, (arr, p) in enumerate(zip(arrays, pred)):
+        b.plot(tr.arrivals[k], p, pf.MARKERS[k], color=pf.CYCLE[k], ms=3.2, mfc="none", mew=0.8,
+               ls="none", label=f"Array {arr.name}")
+    lo, hi = 3.5, 9.5
+    pf.one_to_one(b, lo, hi, color=C["ink"], label="1:1")
+    b.set(xlabel="Picked arrival (s)", ylabel="Fitted wake arrival (s)", xticks=[4, 6, 8],
+          yticks=[4, 6, 8])
+    leg = pf.legend(b, loc="lower right", last=["1:1"])
+    b.text(0.04, 0.96, f"RMS = {1e3 * tr.residual_rms:.0f} ms", transform=b.transAxes,
+           ha="left", va="top", fontsize=7.5)
+    pf.panel_labels([a, b])
+    pf.save(fig, "fig06_boat_tracking", outdir=OUT)
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["1", "2", "3"]
+    which = sys.argv[1:] or ["1", "2", "3", "4"]
     if "1" in which:
         fig_open_boundary()
     if "2" in which:
@@ -213,3 +317,7 @@ if __name__ == "__main__":
         sim, arrays, ball, snap, res = hydar_scene()
         fig_timeseries(arrays, res)
         fig_map(sim, arrays, ball, snap, res)
+    if "4" in which or "hull" in which:
+        fig_hull()
+    if "4" in which:
+        fig_boat(*boat_scene())

@@ -152,3 +152,89 @@ def locate(arrays, c: float, t0: float | None = None, fraction: float = 0.1,
         out["position"], out["t0"] = res.x, t0
     out["residual_rms"] = float(np.sqrt(np.mean(res.fun ** 2)))
     return out
+
+
+# ---------------------------------------------------------------------------
+# Moving source: track a supercritical boat from its V-shaped wake
+# ---------------------------------------------------------------------------
+@dataclass
+class BoatTrack:
+    """Constant-velocity boat track estimated from wake arrivals."""
+
+    p0: np.ndarray          # boat position at t = 0 [m]
+    heading_deg: float      # direction of travel, degrees counter-clockwise from +x
+    speed: float            # [m/s]
+    mach: float             # speed / wave speed (depth Froude number)
+    residual_rms: float     # [s]
+    arrivals: list          # per-array arrival times [s]
+
+    @property
+    def direction(self) -> np.ndarray:
+        th = np.radians(self.heading_deg)
+        return np.array([np.cos(th), np.sin(th)])
+
+    def position(self, t) -> np.ndarray:
+        """Estimated boat position at time(s) t."""
+        return self.p0 + np.multiply.outer(np.asarray(t, float) * self.speed, self.direction)
+
+    @property
+    def wake_half_angle_deg(self) -> float:
+        return float(np.degrees(np.arcsin(1.0 / self.mach)))
+
+    def __str__(self) -> str:
+        return (f"speed {self.speed:.2f} m/s (Fr = {self.mach:.2f}), heading {self.heading_deg:.1f} deg, "
+                f"position at t=0 ({self.p0[0]:.2f}, {self.p0[1]:.2f}) m, "
+                f"wake half-angle {self.wake_half_angle_deg:.1f} deg, rms residual {1e3 * self.residual_rms:.0f} ms")
+
+
+def wake_arrival(r: np.ndarray, p0, heading_deg: float, speed: float, c: float) -> np.ndarray:
+    """Time the Mach-cone wake of a boat on a straight track first reaches points r.
+
+    A boat at p(t) = p0 + U t e with U > c trails a cone of half-angle
+    mu = arcsin(c/U). A point a distance s along the track and d to the side
+    is reached at t = (s + d * sqrt(M**2 - 1)) / U, with M = U/c.
+    """
+    th = np.radians(heading_deg)
+    e = np.array([np.cos(th), np.sin(th)])
+    rel = np.atleast_2d(r) - np.asarray(p0)
+    s = rel @ e
+    d = np.abs(rel[:, 0] * e[1] - rel[:, 1] * e[0])
+    M = speed / c
+    return (s + d * np.sqrt(max(M * M - 1.0, 0.0))) / speed
+
+
+def track_boat(arrays, c: float, fraction: float = 0.2, t_start: float = 0.0,
+               t_end: float | None = None) -> BoatTrack:
+    """HYDAR for a moving boat: fit a straight, constant-speed track.
+
+    Picks the first wake arrival at every sensor of every array, then fits
+    the boat's position at t = 0, heading and speed so that the predicted
+    Mach-cone arrival times (wake_arrival) match the picks in a least-squares
+    sense. Needs a supercritical boat (speed > c) seen by at least two arrays.
+    """
+    picks = [pick_arrivals(a.time, a.dynamic_pressure, fraction, t_start, t_end) for a in arrays]
+    pos = np.vstack([a.positions for a in arrays])
+    arr = np.concatenate(picks)
+    ok = np.isfinite(arr)
+    pos, arr = pos[ok], arr[ok]
+    if arr.size < 6:
+        raise RuntimeError("too few wake arrivals picked")
+
+    def resid(q):
+        x0, y0, th, U = q
+        return wake_arrival(pos, (x0, y0), th, U, c) - arr
+
+    centre, t_mean = pos.mean(axis=0), arr.mean()
+    best = None
+    for th in np.arange(0, 360, 30.0):
+        for U in (1.2 * c, 1.6 * c, 2.2 * c):
+            e = np.array([np.cos(np.radians(th)), np.sin(np.radians(th))])
+            p_init = centre - e * U * t_mean
+            res = least_squares(resid, [*p_init, th, U],
+                                bounds=([-np.inf, -np.inf, -np.inf, 1.0001 * c],
+                                        [np.inf, np.inf, np.inf, 10 * c]))
+            if best is None or res.cost < best.cost:
+                best = res
+    x0, y0, th, U = best.x
+    return BoatTrack(np.array([x0, y0]), float(th % 360), float(U), float(U / c),
+                     float(np.sqrt(np.mean(best.fun ** 2))), picks)

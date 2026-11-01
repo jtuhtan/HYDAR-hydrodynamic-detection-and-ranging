@@ -20,3 +20,6 @@ packages = ["hydar"]
 [project.urls]
 Homepage = "https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging"
 Issues = "https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging/issues"
+
+[tool.pytest.ini_options]
+markers = ["slow: long-running end-to-end simulations"]

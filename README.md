@@ -65,6 +65,7 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 | `examples/01_open_boundary.py` | A hump of water spreads out and leaves the domain. After 8 s, 2 × 10⁻⁵ of the energy is left, so the walls act as open water. |
 | `examples/02_drop_sphere.py` | A floating sphere (600 kg/m³) heaves and settles at its Archimedes draft. A sinking one (2500 kg/m³) falls to the bottom. Both radiate rings of waves. |
 | `examples/03_hydar_localization.py` | The full HYDAR pipeline with four arrays, both with a known drop time and with an unknown one. |
+| `examples/04_boat_tracking.py` | Case study 2: a 4.5 m Series 60 boat crosses the domain at 5 m/s, and HYDAR tracks it from its wake (about 1 minute). |
 | `examples/make_hero_animation.py` | Renders the animation at the top of this page from a real simulation (needs ffmpeg, about 5 minutes). The waves, arrival times and the final fix are all computed by `hydar`; the drone and splash are decoration. |
 | `docs/make_figures.py` | Regenerates the four figures below (PNG at 600 dpi, plus editable PDF and SVG) in the author's paper figure style (`docs/paperfig.py`), sized for a 170 mm text width. |
 
@@ -79,6 +80,33 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 ![Figure 3](docs/img/fig03_hydar_timeseries.png)
 
 **Figure 3.** Dynamic pressure recorded at 100 Hz by the nine sensors of each array (**a–d** = arrays A–D) for the drop in the map above. The shaded band spans the first to the last picked arrival across each array; this spread in arrival time gives the bearing, and the arrival time at the array centre gives the range.
+
+---
+
+## Case study 2: tracking a small boat
+
+A 4.5 m boat with a **Series 60** hull (beam 0.60 m, draft 0.24 m, 389 L displacement) runs at 5 m/s on a heading of 10° through 1 m deep water. The shallow-water wave speed is √(gh) = 3.13 m/s, so the boat is faster than its own waves (depth Froude number Fr = 1.6) and drags a V-shaped wake. The same four 3 × 3 arrays record the wake at 100 Hz. From the wake arrival times alone, HYDAR recovers the boat's speed (5.04 m/s), heading (9.6°) and track, staying within 0.3 m of the bow along the whole crossing.
+
+```python
+from hydar import Boat, track_boat
+from hydar.boat import Series60Hull
+
+boat = Boat(hull=Series60Hull(length=4.5), speed=5.0, x=-2.5, y=12.0, heading_deg=10.0)
+sim.add(boat)                         # sim and arrays set up as in the drop example (dx = 0.05 m)
+sim.run(12.0)
+track = track_boat(arrays, c=sim.c)   # speed, heading, position at t = 0, wake angle
+print(track.position(5.0))            # where the boat was at t = 5 s
+```
+
+![Figure 4](docs/img/fig05_series60_hull.png)
+
+**Figure 4.** The Series 60 hull used in the boat case study, scaled to L = 4.5 m. **a**, half-breadth plan with waterlines at 0, 25, 50, 75 and 95 % of the draft (dark to light). **b**, body plan: stations 1 to 4 of the aft body on the left and stations 6 to 9 of the fore body on the right, with the midship section (black) on both sides. As built, the hull has C_B = 0.600, C_P = 0.614, C_M = 0.977, C_WP = 0.706 and its LCB 1.5 % L aft of midships.
+
+![Figure 5](docs/img/fig06_boat_tracking.png)
+
+**Figure 5.** HYDAR tracking of the boat. **a**, surface elevation 5 s after the start, showing the V-shaped wake (Mach cone, half-angle 38.8°). The HYDAR track (dashed red) lies on the true track of the bow (black). **b**, wake arrival times picked at all 36 sensors against those predicted by the fitted track; the RMS misfit is 13 ms.
+
+**How the boat tracking works.** A boat moving at speed U > c trails a Mach cone of half-angle μ = arcsin(c/U). A point a distance s along the track and d to the side is first reached by the wake at t = (s + d √(M² − 1)) / U, with M = U/c. `track_boat` picks the first wake arrival at every sensor, then fits the boat's position at t = 0, its heading and its speed so that these predicted times match the picks, using least squares from several starting guesses. The wake starts at the bow, so the fitted track follows the bow rather than the hull centre.
 
 ---
 
@@ -123,7 +151,19 @@ $$
 * `pressure_model="hydrostatic"` (default): $p_{dyn}=\rho g\eta$. This matches the shallow-water solver and is used for HYDAR picking.
 * `pressure_model="airy"`: each frequency component is attenuated with depth by linear (Airy) wave theory, $K_p=\cosh k(h+z)/\cosh kh$ with $\omega^2 = gk\tanh kh$. It shows how strongly a deep array filters short waves. Because the filter is zero-phase, it smears sharp fronts slightly earlier in time, so do not use it for arrival picking.
 
-### 5. HYDAR localization
+### 5. Boat
+
+`Boat` moves a hull along a straight line at constant speed. The hull's depth below the waterline, D(x, y, t), is sampled on the grid, and its rate of change, q = ∂D/∂t, is injected as the volume source. Water is pushed out ahead of the bow and flows back behind the stern; the source integrates to zero, and the water raised around the hull equals its displaced volume (tested to within 3 %). The boat can start inside the absorbing layer so that it enters the domain already at speed.
+
+The default `Series60Hull` follows the Series 60 parent form (Todd, 1963): L/B = 7.5, B/T = 2.5, C_B = 0.60, C_P = 0.614, C_M = 0.977, C_WP = 0.706, LCB 1.5 % L aft. The published offset table is not reproduced. Instead, smooth curves are fitted to exactly these coefficients:
+
+* the sectional-area curve $A(\xi)=A_M(1-|\xi|^{n})$, with separate fore and aft exponents that set C_P and the LCB;
+* the waterline $b(\xi)=\tfrac{B}{2}(1-|\xi|^{m})$, with m set by C_WP;
+* section depth profiles $D = T\,(1-|y/b|^{k})$, with k chosen to give each section its area.
+
+Principal dimensions, displacement, prismatic distribution and LCB therefore match Series 60, while the detailed section shapes are approximate. `Series60Hull.coefficients()` reports the values achieved, and a test checks them to ±0.003. An `EllipseHull` is also available.
+
+### 6. HYDAR localization
 
 Each array acts as a small sonar receiver.
 
@@ -142,6 +182,7 @@ In example 3, every bearing is within 0.4° of the truth, the single-array range
 * Uniform depth, flat bottom, no current, no wind waves or sensor noise.
 * The sphere moves vertically only and is a source only while it crosses the surface. A fully submerged moving body does not radiate in this model.
 * Sensors are ideal point gauges.
+* **Boats.** Only supercritical boats (U > √(gh)) produce a wake in this model. A slower boat just carries a local depression with it. Real boats in deeper water make a dispersive Kelvin wake, which needs a dispersive solver. The boat case study also has wave heights near 10 % of the depth, where linear theory is starting to strain, and the staggered grid leaves short numerical ripples behind the sharp wake front. These ripples do not affect the first-arrival picks.
 
 ## Repository layout
 
@@ -149,10 +190,12 @@ In example 3, every bearing is within 0.4° of the truth, the single-array range
 hydar/
   solver.py     2D shallow-water solver with PML walls
   drop.py       DropObject (sphere sinks or floats, two-way coupled source)
+  boat.py       Boat with Series 60 (or elliptical) hull moving on a straight track
   sensors.py    SensorArray (3x3 at 1 m, 100 Hz, x/y/z placement, depth response)
-  locate.py     HYDAR: arrival picking, TDOA bearing, TOF range, multi-array fusion
+  locate.py     HYDAR: arrival picking, TDOA bearing, TOF range, multi-array fusion,
+                and boat tracking from the wake (track_boat)
   plotting.py   time-series and map plots
-examples/       runnable scripts (01 to 03)
+examples/       runnable scripts (01 to 04) and the hero animation
 tests/          pytest suite
 docs/img/       figures used in this README
 ```
@@ -166,6 +209,8 @@ HYDAR was conceived and created by **Jeff Tuhtan**.
 
 If you use HYDAR in your work, please credit the author and link to this repository.
 
-## Reference
+## References
 
 Bérenger, J.-P. (1994). A perfectly matched layer for the absorption of electromagnetic waves. *Journal of Computational Physics*, 114(2), 185–200.
+
+Todd, F. H. (1963). *Series 60: Methodical experiments with models of single-screw merchant ships*. David Taylor Model Basin Report 1712, Washington, DC.
