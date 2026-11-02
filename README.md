@@ -2,14 +2,14 @@
 
 <p align="center"><img src="docs/img/hydar_hero.gif" alt="A drone drops a sphere, the waves wash over four sensor arrays, and red lasers trace the HYDAR fix back to the drop point" width="720"></p>
 
-**HYDAR** locates an object that enters the water using the surface waves it makes. Arrays of pressure sensors record the passing waves, and the **time of flight** of the wave front gives the **direction and distance** from each array's centre to the source. It works the way radar or sonar does, except that the signal is a hydrodynamic (water-wave) disturbance rather than an electromagnetic or acoustic echo.
+**HYDAR** locates objects in water from the surface waves they make. Arrays of pressure sensors record the passing waves, and the **time of flight** of the wave front gives the **direction and distance** from each array's centre to the source. HYDAR works like radar or sonar, but its signal is a water wave rather than an electromagnetic or acoustic echo.
 
-This repository contains a self-contained Python simulator for developing and testing HYDAR:
+This repository is a self-contained Python simulator for developing and testing HYDAR. It has four parts:
 
-1. a 2D shallow-water wave solver on a large rectangular domain whose walls do not reflect, plus a **dispersive** linear potential-flow solver (exact dispersion relation) for boat wakes,
-2. a **drop object** module, where a sphere of given diameter and density is dropped at a chosen point and sinks or floats, making surface waves,
-3. **pressure sensor arrays** (for example 3 × 3 sensors at 1 m spacing) placed at any x, y and depth z, sampling at 100 Hz,
-4. the **HYDAR localization** step: bearing from time differences of arrival, range from time of flight, and fusion across arrays.
+1. **Wave solvers.** A 2D shallow-water solver on a large rectangular domain with non-reflecting walls, and a **dispersive** linear potential-flow solver, with the exact dispersion relation, for boat wakes.
+2. **Drop objects.** A sphere of chosen diameter and density is dropped at a chosen point; it sinks or floats and makes surface waves.
+3. **Pressure sensor arrays.** Arrays such as 3 × 3 sensors at 1 m spacing can be placed at any x, y and depth z, and sample at 100 Hz.
+4. **HYDAR localization.** Each array estimates a bearing from time differences of arrival and a range from time of flight; the arrays' estimates are then fused.
 
 <p align="center"><img src="docs/img/fig04_hydar_map.png" alt="HYDAR localization map" width="420"></p>
 
@@ -27,7 +27,7 @@ cd HYDAR-hydrodynamic-detection-and-ranging
 pip install -e ".[test]"
 
 python examples/03_hydar_localization.py   # full pipeline, about 40 s
-pytest                                     # 12 tests
+pytest                                     # 22 tests, about 4 minutes
 ```
 
 ```python
@@ -62,18 +62,22 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 
 | Script | What it shows |
 |---|---|
-| `examples/01_open_boundary.py` | A hump of water spreads out and leaves the domain. After 8 s, 2 × 10⁻⁵ of the energy is left, so the walls act as open water. |
+| `examples/01_open_boundary.py` | A hump of water spreads out and leaves the domain. After 8 s, only 2 × 10⁻⁵ of the energy remains, so the walls behave like open water. |
 | `examples/02_drop_sphere.py` | A floating sphere (600 kg/m³) heaves and settles at its Archimedes draft. A sinking one (2500 kg/m³) falls to the bottom. Both radiate rings of waves. |
-| `examples/03_hydar_localization.py` | The full HYDAR pipeline with four arrays, both with a known drop time and with an unknown one. |
-| `examples/04_boat_tracking.py` | Case study 2: a 4.5 m Series 60 boat crosses a 120 m × 50 m domain at 3 m/s, its Kelvin wake is computed with the dispersive solver, and HYDAR tracks it from the wake (about 5 minutes). |
-| `examples/05_vessel_localization.py` | Case study 3: a ferry 2.5 km offshore located from its Kelvin wake with one 3 × 3 seabed array, after Rätsep et al. (2020, 2021) (about 1 minute). |
-| `examples/make_boat_animation.py` | Renders the case study 2 animation from a real simulation (needs ffmpeg, about 15 minutes). The blue lines mark the Kelvin cusp lines; the red lasers end where the fitted HYDAR track places the boat at the moment the cusp line first reaches each array. |
-| `examples/make_hero_animation.py` | Renders the animation at the top of this page from a real simulation (needs ffmpeg, about 5 minutes). The waves, arrival times and the final fix are all computed by `hydar`; the drone and splash are decoration. |
-| `docs/make_figures.py` | Regenerates the four figures below (PNG at 600 dpi, plus editable PDF and SVG) in the author's paper figure style (`docs/paperfig.py`), sized for a 170 mm text width. |
+| `examples/03_hydar_localization.py` | Case study 1: the full HYDAR pipeline with four arrays, with the drop time known and unknown. |
+| `examples/04_boat_tracking.py` | Case study 2: a 4.5 m Series 60 boat crosses a 120 m × 50 m domain at 3 m/s. The dispersive solver computes its Kelvin wake, and HYDAR tracks the boat from that wake (about 5 minutes). |
+| `examples/05_vessel_localization.py` | Case study 3: one 3 × 3 seabed array locates a ferry 2.5 km offshore from its Kelvin wake, after Rätsep et al. (2020, 2021) (about 1 minute). |
+| `examples/make_boat_animation.py` | Renders the case study 2 animation from a full simulation (needs ffmpeg, about 15 minutes). Blue lines mark the Kelvin cusp lines. Each red laser ends where the fitted HYDAR track places the boat when the cusp line first reaches that array. |
+| `examples/make_hero_animation.py` | Renders the animation at the top of this page from a full simulation (needs ffmpeg, about 5 minutes). `hydar` computes the waves, arrival times and final fix; the drone and splash are decoration. |
+| `docs/make_figures.py` | Regenerates the figures in this README (PNG at 600 dpi, plus editable PDF and SVG) in the author's paper figure style (`docs/paperfig.py`), sized for a 170 mm text width. |
+
+## Case study 1: locating a dropped sphere
+
+The map at the top of this page shows the result of example 3. Figures 1 and 2 check the two building blocks it relies on, the open boundaries and the drop object, and Figure 3 shows the pressure records that HYDAR analyses.
 
 ![Figure 1](docs/img/fig01_open_boundary.png)
 
-**Figure 1.** Non-reflecting walls. **a–c**, a 1 cm Gaussian hump of water in a 20 m × 12 m, 1 m deep domain spreads out and leaves through the perfectly matched layer. **d**, wave energy left in the domain, relative to the start: it stays at 1 with rigid walls and falls below 10⁻⁴ with the PML.
+**Figure 1.** Non-reflecting walls. **a–c**, a 1 cm Gaussian hump of water in a 20 m × 12 m, 1 m deep domain spreads out and leaves through the perfectly matched layer (PML). **d**, wave energy remaining in the domain, relative to the start. It stays at 1 with rigid walls and falls below 10⁻⁴ with the PML.
 
 ![Figure 2](docs/img/fig02_drop_sphere.png)
 
@@ -81,7 +85,7 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 
 ![Figure 3](docs/img/fig03_hydar_timeseries.png)
 
-**Figure 3.** Dynamic pressure recorded at 100 Hz by the nine sensors of each array (**a–d** = arrays A–D) for the drop in the map above. The shaded band spans the first to the last picked arrival across each array; this spread in arrival time gives the bearing, and the arrival time at the array centre gives the range.
+**Figure 3.** Dynamic pressure recorded at 100 Hz by the nine sensors of each array (**a–d** = arrays A–D) for the drop in the map at the top of the page. The shaded band spans the first to the last picked arrival on each array. This spread in arrival time gives the bearing; the arrival time at the array centre gives the range.
 
 ---
 
@@ -89,7 +93,9 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 
 <p align="center"><img src="docs/img/hydar_boat.gif" alt="A Series 60 boat crosses the domain, the cusp lines of its Kelvin wake sweep over the four arrays, and red lasers trace the HYDAR track" width="720"></p>
 
-A 4.5 m boat with a **Series 60** hull (beam 0.60 m, draft 0.24 m, 389 L displacement) runs at 3 m/s (about 6 knots, length Froude number 0.45) on a heading of 4° through 3 m deep water. Real boat waves are dispersive: long waves travel faster than short ones, and that is what shapes the familiar **Kelvin wake**, with transverse waves behind the boat and diverging waves inside a wedge of half-angle 19.47°. The shallow-water solver cannot make this pattern, so the case study uses `SpectralSolver`, a linear potential-flow model with the exact dispersion relation (Theory, section 1b). Four 3 × 3 arrays, at depths of 0.3 to 0.8 m, read the dynamic pressure at their own depth at 100 Hz.
+A 4.5 m boat with a **Series 60** hull (beam 0.60 m, draft 0.24 m, 389 L displacement) runs at 3 m/s on a heading of 4° through 3 m deep water. Its speed is about 6 knots, a length Froude number of 0.45. Four 3 × 3 arrays, at depths of 0.3 to 0.8 m, record the dynamic pressure at their own depth at 100 Hz.
+
+Boat waves are dispersive: long waves travel faster than short ones. Dispersion shapes the familiar **Kelvin wake**, with transverse waves behind the boat and diverging waves inside a wedge of half-angle 19.47°. The shallow-water solver cannot produce this pattern, so this case study uses `SpectralSolver`, a linear potential-flow model with the exact dispersion relation (Theory, section 1b).
 
 HYDAR picks the moment the wake's **cusp line** passes each of the 36 sensors and fits a straight, constant-speed track to those times.
 
@@ -123,20 +129,24 @@ print(track.position(30.0))           # where the boat was at t = 30 s
 
 **Figure 5.** HYDAR tracking of the boat from its Kelvin wake. **a**, surface elevation 30 s after the start, computed with the dispersive solver: transverse waves behind the boat and diverging waves along the 19.47° cusp lines. The HYDAR track (dashed red) lies on the true track (black). **b**, dynamic pressure at the nine sensors of array A (0.3 m deep), with the picked cusp-line passages (red). **c**, picked cusp passages at all 36 sensors against those predicted by the fitted track; the RMS misfit is 115 ms.
 
-**How the boat tracking works.** In deep water, a boat's wake is bounded by two cusp lines at the Kelvin angle μ = arcsin(1/3) = 19.47°, whatever the boat's speed. A point a distance s along the track and d to the side is crossed by the cusp line at t = (s + d cot μ) / U = (s + 2√2 d) / U. Across a cusp line the wave amplitude follows an Airy function: it grows from zero ahead of the line, reaches Ai(0) = 0.355 on it and peaks at 0.536 just behind it. `pick_wake` therefore band-passes each record, takes its envelope, and picks the time the envelope first reaches 0.355/0.536 = 66 % of its first maximum. A simple first-threshold pick does not work for a wake, because the oscillating signal crosses any threshold on a different crest at each sensor. `track_boat` then fits the boat's position at t = 0, its heading and its speed to the 36 picks by least squares from several starting guesses. The start-up of the boat sends a weak train of long waves ahead of it, so the boat starts inside the absorbing layer and the arrays sit at least 50 m down the track, where the wake is fully developed.
+**How the boat tracking works.** In deep water, two cusp lines at the Kelvin angle μ = arcsin(1/3) = 19.47° bound a boat's wake, whatever the boat's speed. The cusp line crosses a point a distance s along the track and d to the side at t = (s + d cot μ) / U = (s + 2√2 d) / U.
+
+To time that crossing, `pick_wake` uses the shape of the wave envelope. Across a cusp line the wave amplitude follows an Airy function: it grows from zero ahead of the line, reaches Ai(0) = 0.355 on the line and peaks at 0.536 just behind it. `pick_wake` therefore band-passes each record, takes its envelope, and picks the time the envelope first reaches 0.355/0.536 = 66 % of its first maximum. A simple first-threshold pick fails for a wake, because the oscillating signal crosses any threshold on a different crest at each sensor.
+
+`track_boat` then fits the boat's position at t = 0, its heading and its speed to the 36 picks by least squares, starting from several initial guesses. When the boat starts, it sends a weak train of long waves ahead of it. To keep these start-up waves out of the picks, the boat starts inside the absorbing layer and the arrays sit at least 50 m down the track, where the wake is fully developed.
 
 ---
 
 ## Case study 3: locating a passing ferry from its Kelvin wake
 
-This case study follows the field work of Rätsep et al. ([2020](https://doi.org/10.1175/JTECH-D-19-0192.1), [2021](https://doi.org/10.1016/j.oceaneng.2021.109156)) in Tallinn Bay. A 3 × 3 grid of seabed pressure sensors (2.5 m spacing, 0.2 m above the bed in 3 m of water, 100 Hz) records the wakes of fast ferries passing about 3 km offshore. These ships are slower than the long-wave speed of the deep fairway, so they make a **dispersive Kelvin wake**. Simulating a 3 km wide domain with the dispersive solver of case study 2 would be very costly, so the wake is synthesized from linear deep-water theory by integrating the Havelock wave spectrum numerically, so the cusp and both wave branches are exact. A random wind sea (H_s = 0.15 m, 0.4 Hz) and sensor noise are added, and the pressure at the sensor depth uses the Airy depth response.
+This case study follows the field work of Rätsep et al. ([2020](https://doi.org/10.1175/JTECH-D-19-0192.1), [2021](https://doi.org/10.1016/j.oceaneng.2021.109156)) in Tallinn Bay. A 3 × 3 grid of seabed pressure sensors (2.5 m spacing, 0.2 m above the bed in 3 m of water, 100 Hz) records the wakes of fast ferries passing about 3 km offshore. These ships are slower than the long-wave speed of the deep fairway, so they make a **dispersive Kelvin wake**. Simulating a domain 3 km wide with the dispersive solver of case study 2 would be very costly. Instead, the wake is synthesized from linear deep-water theory by integrating the Havelock wave spectrum numerically, which makes the cusp and both wave branches exact. A random wind sea (H_s = 0.15 m, 0.4 Hz) and sensor noise are added, and the pressure at the sensor depth follows the Airy depth response.
 
-In the example, a ferry sails at 11 m/s (21 kn) on a course of 159°, 2.5 km from the array. The analysis sees only the recorded pressures and follows the steps of the papers:
+In the example, a ferry sails at 11 m/s (21 kn) on a course of 159°, 2.5 km from the array. The analysis uses only the recorded pressures and follows the steps of the papers:
 
-1. **Detection.** Spectrograms of five sensors (four corners and the centre) are averaged, which suppresses incoherent noise ([2020](https://doi.org/10.1175/JTECH-D-19-0192.1)). The wake is flagged where its band power rises above the background.
+1. **Detection.** Averaging the spectrograms of five sensors (four corners and the centre) suppresses incoherent noise ([2020](https://doi.org/10.1175/JTECH-D-19-0192.1)). The wake is flagged where its band power rises above the background.
 2. **Speed, distance and time abeam from the spectrogram.** A fixed observer a distance d from the track sees two branches: transverse waves whose frequency falls towards f_t = g/(2πU), and divergent waves whose frequency rises. Both start at the cusp, at √(3/2)·f_t. Fitting the two stationary-phase branches to the spectrogram ridge gives U, d and the time the ship passed abeam. The upper divergent branch is hidden under the wind sea, as noted in the papers, so the fit uses the band below it.
 3. **Wake direction from time delays.** Cross-correlating all 36 sensor pairs gives the delay of the same waves between sensors. A plane-wave fit to those delays gives the direction the cusp waves travel ([2021](https://doi.org/10.1016/j.oceaneng.2021.109156)).
-4. **Course and position.** At the cusp, the waves travel at the Kelvin angle 35°16′ to the ship's course, which leaves two candidate courses. In the field this ambiguity was resolved with the coastline. Here the direction of the late transverse waves, which travel along the course, picks the right one. The distance d and the side of the track the waves came from then place the ship.
+4. **Course and position.** At the cusp, the waves travel at 35°16′ to the ship's course, so each wave direction fits two candidate courses. In the field, the coastline resolved this ambiguity. Here, the late transverse waves travel along the course, and their direction selects the correct candidate. The distance d and the side of the track the waves came from then place the ship.
 
 | | True | HYDAR (case study 3) |
 |---|---|---|
@@ -161,7 +171,7 @@ fix = locate_vessel(array)       # speed, distance, course, ship position at any
 
 **Figure 6.** Case study 3, after Rätsep et al. (2020, 2021). **a**, dynamic pressure at the centre sensor: wind-sea noise, then the ferry wake 15 min after the ship passed abeam. **b**, spectrogram averaged over five sensors. The fitted Kelvin branches (red) follow the ridge points (cyan); the upper divergent branch disappears under the wind sea. **c**, the true track (black) and the HYDAR track (dashed red) from the single 3 × 3 array (blue). The arrow shows the measured direction of the cusp waves; the markers show the ship when the cusp reached the array, true (circle) and estimated (cross).
 
-**Assumptions.** Deep water is assumed along the whole wave path, so refraction and shoaling into the 3 m deep nearshore are ignored, and the hull is represented by a smooth amplitude spectrum rather than a specific ship. The spectrogram relations used here are derived in `hydar/kelvin.py` from stationary phase; the papers state the same physics in terms of the cusp and limiting transverse frequencies.
+**Assumptions.** The model assumes deep water along the whole wave path, so it ignores refraction and shoaling as the waves enter the 3 m deep nearshore. It also represents the hull by a smooth amplitude spectrum rather than a specific ship. The spectrogram relations used here are derived in `hydar/kelvin.py` from stationary phase; the papers state the same physics in terms of the cusp and limiting transverse frequencies.
 
 ---
 
@@ -177,7 +187,7 @@ $$
 \frac{\partial v}{\partial t} = -g\frac{\partial \eta}{\partial y}
 $$
 
-Waves travel at $c=\sqrt{gh}$, and $q$ is a volume source per unit area that objects use to push water aside. The equations are solved with second-order finite differences on a staggered (Arakawa C / Yee) grid with a time step $\Delta t = \mathrm{CFL}\,\Delta x / c$, using CFL = 0.5 by default.
+Waves travel at $c=\sqrt{gh}$, and $q$ is a volume source per unit area through which objects push water aside. The solver uses second-order finite differences on a staggered (Arakawa C / Yee) grid, with a time step $\Delta t = \mathrm{CFL}\,\Delta x / c$ and CFL = 0.5 by default.
 
 ### 1b. Dispersive solver (boat wakes)
 
@@ -188,7 +198,11 @@ $$
 \frac{\partial \hat\phi}{\partial t} = -g\,\hat\eta - \frac{\hat P}{\rho},
 $$
 
-with the exact dispersion relation $\omega^2 = gk\tanh(kh)$, valid from shallow to deep water. Each oscillator is advanced exactly over a time step, with the applied surface pressure P held at its mid-step value, so the solver has no stability limit and no numerical dispersion. The boat is the classical **pressure patch** of linear ship-wave theory (Wehausen and Laitone, 1960), $P=\rho g D(x,y,t)$, where D is the hull draft. Sensors with `pressure_model="solver"` read the dynamic pressure at their own depth directly, $p_{dyn}/(\rho g)=\mathcal F^{-1}[(\hat\eta+\hat P/\rho g)\cosh k(h+z)/\cosh kh]$. The FFT makes the domain periodic, so the walls are a **sponge layer** in which η and φ are damped by $e^{-\sigma\Delta t}$, with σ growing quadratically to 3 s⁻¹ at the edge. Tests check the standing-wave frequency against the dispersion relation and that less than 10⁻³ of the wave energy is left once the waves have left the domain.
+with the exact dispersion relation $\omega^2 = gk\tanh(kh)$, valid from shallow to deep water. The solver advances each oscillator exactly over a time step, holding the applied surface pressure P at its mid-step value. It therefore has no stability limit and no numerical dispersion.
+
+The boat enters as the classical **pressure patch** of linear ship-wave theory (Wehausen and Laitone, 1960), $P=\rho g D(x,y,t)$, where D is the hull draft. Sensors with `pressure_model="solver"` read the dynamic pressure at their own depth directly, $p_{dyn}/(\rho g)=\mathcal F^{-1}[(\hat\eta+\hat P/\rho g)\cosh k(h+z)/\cosh kh]$.
+
+Because the FFT makes the domain periodic, the walls are a **sponge layer** that damps η and φ by $e^{-\sigma\Delta t}$, with σ growing quadratically to 3 s⁻¹ at the edge. Tests check the standing-wave frequency against the dispersion relation, and check that less than 10⁻³ of the wave energy remains once the waves have left the domain.
 
 ### 2. Non-reflecting walls
 
@@ -202,7 +216,7 @@ $$
 (m + C_a\rho_w V_{sub})\,\dot w = \rho_w g V_{sub} - m g - \tfrac12 \rho_w C_d A\, w|w|
 $$
 
-$V_{sub}$ is the spherical-cap volume below the local water level, with $C_a = 0.5$ and $C_d = 0.5$ by default. As the sphere crosses the surface, the change in submerged volume, $\dot V_{sub}$, is injected as the source q over the waterline disc. The volume of water raised in the domain therefore equals the volume the sphere displaces, which the tests verify to within 2 %. The water level around the sphere is fed back into $V_{sub}$, so a floating sphere also responds to the waves it radiates (two-way coupling). Spheres lighter than water settle at the Archimedes draft. Heavier ones sink and stop on the bottom at $z = -h + D/2$.
+Here $V_{sub}$ is the spherical-cap volume below the local water level, and $C_a = 0.5$ and $C_d = 0.5$ by default. As the sphere crosses the surface, the rate of change of submerged volume, $\dot V_{sub}$, enters as the source q over the waterline disc. The volume of water raised in the domain therefore equals the volume the sphere displaces; the tests verify this to within 2 %. The water level around the sphere is fed back into $V_{sub}$, so a floating sphere also responds to the waves it radiates (two-way coupling). Spheres lighter than water settle at the Archimedes draft. Heavier ones sink and stop on the bottom at $z = -h + D/2$.
 
 **Resolution.** The sphere should span at least 8 to 10 grid cells (Δx ≤ D/10 is recommended), and the code warns if it spans fewer. `recommend_grid(D, h)` suggests Δx and a domain size.
 
@@ -215,40 +229,41 @@ p(t) = \rho g(-z) + p_{dyn}(t)
 $$
 
 * `pressure_model="hydrostatic"` (default): $p_{dyn}=\rho g\eta$. This matches the shallow-water solver and is used for HYDAR picking.
-* `pressure_model="airy"`: each frequency component is attenuated with depth by linear (Airy) wave theory, $K_p=\cosh k(h+z)/\cosh kh$ with $\omega^2 = gk\tanh kh$. It shows how strongly a deep array filters short waves. Because the filter is zero-phase, it smears sharp fronts slightly earlier in time, so do not use it for arrival picking.
+* `pressure_model="airy"`: linear (Airy) wave theory attenuates each frequency component with depth, $K_p=\cosh k(h+z)/\cosh kh$ with $\omega^2 = gk\tanh kh$. This model shows how strongly a deep array filters short waves. Because the filter is zero-phase, it smears sharp fronts slightly earlier in time, so do not use it for arrival picking.
+* `pressure_model="solver"`: the dispersive `SpectralSolver` supplies the dynamic pressure at the sensor depth directly (section 1b). Case study 2 uses this model.
 
 ### 5. Boat
 
-`Boat` moves a hull along a straight line at constant speed. In the dispersive `SpectralSolver` the hull's depth below the waterline, D(x, y, t), acts as the surface pressure head P/(ρg) (section 1b). In the shallow-water `Solver`, the rate of change q = ∂D/∂t is injected as the volume source instead. Water is pushed out ahead of the bow and flows back behind the stern; the source integrates to zero, and the water raised around the hull equals its displaced volume (tested to within 3 %). The boat can start inside the absorbing layer so that it enters the domain already at speed.
+`Boat` moves a hull along a straight line at constant speed. In the dispersive `SpectralSolver`, the hull's depth below the waterline, D(x, y, t), acts as the surface pressure head P/(ρg) (section 1b). In the shallow-water `Solver`, its rate of change q = ∂D/∂t enters as the volume source instead. This source pushes water out ahead of the bow and lets it flow back behind the stern. It integrates to zero, and the water raised around the hull equals the displaced volume (tested to within 3 %). In both solvers, the boat can start inside the absorbing layer so that it enters the domain already at speed.
 
-The default `Series60Hull` follows the Series 60 parent form (Todd, 1963): L/B = 7.5, B/T = 2.5, C_B = 0.60, C_P = 0.614, C_M = 0.977, C_WP = 0.706, LCB 1.5 % L aft. The published offset table is not reproduced. Instead, smooth curves are fitted to exactly these coefficients:
+The default `Series60Hull` follows the Series 60 parent form (Todd, 1963): L/B = 7.5, B/T = 2.5, C_B = 0.60, C_P = 0.614, C_M = 0.977, C_WP = 0.706, LCB 1.5 % L aft. Rather than reproduce the published offset table, the code fits smooth curves to exactly these coefficients:
 
 * the sectional-area curve $A(\xi)=A_M(1-|\xi|^{n})$, with separate fore and aft exponents that set C_P and the LCB;
 * the waterline $b(\xi)=\tfrac{B}{2}(1-|\xi|^{m})$, with m set by C_WP;
 * section depth profiles $D = T\,(1-|y/b|^{k})$, with k chosen to give each section its area.
 
-Principal dimensions, displacement, prismatic distribution and LCB therefore match Series 60, while the detailed section shapes are approximate. `Series60Hull.coefficients()` reports the values achieved, and a test checks them to ±0.003. An `EllipseHull` is also available.
+The principal dimensions, displacement, prismatic distribution and LCB therefore match Series 60, while the detailed section shapes are approximate. `Series60Hull.coefficients()` reports the values achieved, and a test checks them to ±0.003. An `EllipseHull` is also available.
 
 ### 6. HYDAR localization
 
-Each array acts as a small sonar receiver.
+Each array acts as a small sonar receiver. For a drop, HYDAR works in four steps.
 
 1. **Arrival picking.** At each sensor, the arrival time $t_i$ is the first time $|p_{dyn}|$ exceeds a fraction (10 % by default) of the array's peak, interpolated between samples.
 2. **Direction from time differences of arrival.** Across a small array the front is nearly plane, so $t_i = \tau + \mathbf{s}\cdot(\mathbf r_i-\mathbf r_c)$. A linear least-squares fit gives the slowness vector **s**, and the source lies in the direction $-\mathbf s/|\mathbf s|$ from the array centre. The fitted apparent speed $1/|\mathbf s|$ should match $c$, which serves as a quality check.
 3. **Range from time of flight.** When the drop time $t_0$ is known, $r = c\,(\tau - t_0)$, as in radar ranging. Bearing and range together give a position from a single array.
-4. **Fusion across arrays.** All arrival times are fitted together to a circular front, $t_i = t_0 + |\mathbf r_i - \mathbf x_s|/c$, solving for the source position $\mathbf x_s$ and, if it is unknown, $t_0$. Bearing-line intersection provides the initial guess. Because $t_0$ can be fitted, a constant picking delay cancels out, and the method also works when nobody knows when the object entered the water.
+4. **Fusion across arrays.** A circular front, $t_i = t_0 + |\mathbf r_i - \mathbf x_s|/c$, is fitted to all arrival times together, solving for the source position $\mathbf x_s$ and, if it is unknown, $t_0$. The intersection of the bearing lines provides the initial guess. Because $t_0$ can be fitted, a constant picking delay cancels out, and the method also works when the time the object entered the water is unknown.
 
-In example 3, every bearing is within 0.4° of the truth, the single-array ranges are within 0.2 m over distances of 8 to 17 m, and the fused position is within 0.05 m, whether or not the drop time is known.
+In example 3, every bearing is within 0.4° of the truth, the single-array ranges are within 0.2 m over distances of 8 to 17 m, and the fused position is within 0.05 m, whether or not the drop time is known. A moving boat needs a different model of the wave front; case study 2 describes it.
 
 ---
 
 ## Assumptions and limitations
 
-* **Shallow-water physics (drop case).** The drop examples use the shallow-water `Solver`, which is linear and non-dispersive, so it is valid for waves much longer than the depth and for amplitudes much smaller than the depth. Real waves from objects smaller than the water depth are dispersive: longer waves outrun shorter ones, and the front spreads out. The dispersive `SpectralSolver` (used for the boat) could carry the drop case too, but arrival picking would then have to account for the group velocity.
-* Uniform depth, flat bottom, no current, no wind waves or sensor noise.
-* The sphere moves vertically only and is a source only while it crosses the surface. A fully submerged moving body does not radiate in this model.
-* Sensors are ideal point gauges.
-* **Boats.** Case study 2 uses the dispersive solver, which gives the Kelvin wake, but it is still linear: the hull is a pressure patch rather than a body boundary, and wave breaking and nonlinear steepening near the hull are left out. The tracking fit assumes a straight track at constant speed and the deep-water Kelvin angle, which holds while the depth Froude number U/√(gh) stays below about 0.6 (it is 0.55 here). In the shallow-water `Solver`, only supercritical boats (U > √(gh)) make a wake, a Mach cone, and `track_boat(..., wake="mach")` tracks that case.
+* **Shallow-water physics (drop case).** The drop examples use the shallow-water `Solver`. Because it is linear and non-dispersive, it is valid only for waves much longer than the depth and for amplitudes much smaller than the depth. Real waves from objects smaller than the water depth are dispersive: longer waves outrun shorter ones, and the front spreads out. The dispersive `SpectralSolver` could also model the drop case, but arrival picking would then have to account for the group velocity.
+* **Idealized water.** The depth is uniform and the bottom flat. Case studies 1 and 2 have no current, wind waves or sensor noise; case study 3 adds wind sea and noise.
+* **Sphere motion.** The sphere moves only vertically, and it is a wave source only while it crosses the surface. A fully submerged moving body does not radiate in this model.
+* **Sensors.** All sensors are ideal point gauges.
+* **Boats.** The dispersive solver of case study 2 produces the Kelvin wake, but it is still linear. The hull is a pressure patch rather than a body boundary, and the model leaves out wave breaking and nonlinear steepening near the hull. The tracking fit assumes a straight track at constant speed and the deep-water Kelvin angle. That angle holds while the depth Froude number U/√(gh) stays below about 0.6; it is 0.55 here. In the shallow-water `Solver`, only supercritical boats (U > √(gh)) make a wake, a Mach cone, which `track_boat(..., wake="mach")` tracks.
 
 ## Repository layout
 
