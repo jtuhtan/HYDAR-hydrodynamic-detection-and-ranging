@@ -30,6 +30,10 @@ Two pressure models are available (SensorArray.pressure_model):
                          short waves. The filter is zero-phase, so it smears
                          a sharp front slightly earlier in time; do not use
                          it for arrival picking.
+"solver"                 p_dyn taken directly from hydar.spectral.SpectralSolver
+                         at the sensor depth (exact linear potential flow, also
+                         includes the pressure of a hull passing overhead). With
+                         this model, SensorArray.eta holds p_dyn/(rho g).
 """
 
 from __future__ import annotations
@@ -74,7 +78,7 @@ class SensorArray:
     nx, ny   : number of sensors along x and y (3 x 3 by default)
     spacing  : distance between neighbouring sensors [m]
     fs       : sampling rate [Hz]
-    pressure_model : "hydrostatic" or "airy" (see module docstring)
+    pressure_model : "hydrostatic", "airy" or "solver" (see module docstring)
     rotation_deg   : rotation of the grid, degrees counter-clockwise
     """
 
@@ -130,6 +134,8 @@ class SensorArray:
         self._idx = (i0, j0)
         self._w = ((1 - ax) * (1 - ay), ax * (1 - ay), (1 - ax) * ay, ax * ay)
         self._depth, self._g, self._rho = solver.depth, solver.g, solver.rho
+        if self.pressure_model == "solver" and not hasattr(solver, "pressure_head"):
+            raise ValueError(f"{self.name}: pressure_model 'solver' needs a SpectralSolver")
 
     def source(self, solver):  # sensors are passive
         if self._w is None:
@@ -137,7 +143,7 @@ class SensorArray:
         return None
 
     def advance(self, solver) -> None:
-        eta = solver.eta
+        eta = solver.pressure_head(self.z) if self.pressure_model == "solver" else solver.eta
         i, j = self._idx
         w00, w10, w01, w11 = self._w
         val = w00 * eta[i, j] + w10 * eta[i + 1, j] + w01 * eta[i, j + 1] + w11 * eta[i + 1, j + 1]
@@ -163,11 +169,11 @@ class SensorArray:
     @property
     def dynamic_pressure(self) -> np.ndarray:
         """Wave-induced pressure at the sensor depth [Pa], (n_sensors, n_samples)."""
-        if self.pressure_model == "hydrostatic":
+        if self.pressure_model in ("hydrostatic", "solver"):
             return self._rho * self._g * self.eta
         if self.pressure_model == "airy":
             return depth_response(self.eta, self.fs, self.z, self._depth, self._g, self._rho)
-        raise ValueError("pressure_model must be 'hydrostatic' or 'airy'")
+        raise ValueError("pressure_model must be 'hydrostatic', 'airy' or 'solver'")
 
     @property
     def pressure(self) -> np.ndarray:

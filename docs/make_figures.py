@@ -251,59 +251,85 @@ def fig_hull():
 
 
 def boat_scene():
-    from hydar import Boat, track_boat, wake_arrival
+    """Case study 2: Series 60 boat, Kelvin wake from the dispersive solver."""
+    import pickle
+    from hydar import Boat, SpectralSolver, track_boat, wake_arrival
     from hydar.boat import Series60Hull
-    grid = Grid(lx=40.0, ly=30.0, dx=0.05, n_pml=60)
-    sim = Solver(grid, depth=1.0)
-    arrays = [SensorArray("A", 10.0, 4.0, z=-0.3), SensorArray("B", 28.0, 5.0, z=-0.5),
-              SensorArray("C", 12.0, 25.0, z=-0.5), SensorArray("D", 31.0, 25.0, z=-0.8)]
+    cache = Path(__file__).with_name(".boat_scene.pkl")
+    if cache.exists():
+        return pickle.loads(cache.read_bytes())
+    grid = Grid(lx=120.0, ly=50.0, dx=0.125, n_pml=80)
+    sim = SpectralSolver(grid, depth=3.0, dt=0.01)
+    arrays = [SensorArray("A", 50.0, 14.0, z=-0.3, pressure_model="solver"),
+              SensorArray("B", 75.0, 16.0, z=-0.5, pressure_model="solver"),
+              SensorArray("C", 55.0, 36.0, z=-0.5, pressure_model="solver"),
+              SensorArray("D", 80.0, 40.0, z=-0.8, pressure_model="solver")]
     for a in arrays:
         sim.add(a)
-    boat = Boat(hull=Series60Hull(4.5), speed=5.0, x=-2.5, y=12.0, heading_deg=10.0)
+    boat = Boat(hull=Series60Hull(4.5), speed=3.0, x=-8.0, y=22.0, heading_deg=4.0, ramp=4.0)
     sim.add(boat)
-    sim.run(5.0)
+    sim.run(30.0)
     snap = sim.eta[grid.interior].copy()
-    sim.run(12.0)
-    tr = track_boat(arrays, c=sim.c)
-    pred = [wake_arrival(a.positions, tr.p0, tr.heading_deg, tr.speed, sim.c) for a in arrays]
-    return sim, arrays, boat, snap, tr, pred
+    sim.run(44.0)
+    tr = track_boat(arrays)
+    pred = [wake_arrival(a.positions, tr.p0, tr.heading_deg, tr.speed) for a in arrays]
+    sim.objects = []
+    out = (grid, arrays, boat, snap, tr, pred)
+    cache.write_bytes(pickle.dumps(out))
+    return out
 
 
-def fig_boat(sim, arrays, boat, snap, tr, pred):
-    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 70 * pf.MM))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.75, 1])
-    a, b = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1])
-    v = np.percentile(np.abs(snap), 99.8)
+def fig_boat(grid, arrays, boat, snap, tr, pred):
+    from types import SimpleNamespace
+    sim = SimpleNamespace(grid=grid)
+    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 122 * pf.MM))
+    a = fig.add_axes([0.075, 0.49, 0.80, 0.43])
+    a.set_anchor("W")
+    b = fig.add_axes([0.085, 0.085, 0.50, 0.29])
+    c = fig.add_axes([0.715, 0.085, 0.255, 0.29])
+    v = 0.04
     m = field(a, sim, snap, v)
-    tt = np.linspace(-1, 10, 50)
-    bow = boat.position(np.clip(tt, 0, None)) + 0.5 * boat.length * boat.e
-    a.plot(*bow.T, color=C["ink"], lw=0.9, label="True track (bow)")
+    tt = np.linspace(0, 44, 50)
+    a.plot(*boat.position(tt).T, color=C["ink"], lw=0.9, label="True track")
     a.plot(*tr.position(tt).T, color=C["red"], lw=1.2, ls="--", label="HYDAR track")
     for arr in arrays:
-        a.plot(*arr.positions.T, "s", color=C["ink"], ms=1.6)
-        left = arr.x < 20
-        a.annotate(arr.name, (arr.positions[:, 0].min() if left else arr.positions[:, 0].max(), arr.y),
-                   xytext=(-5 if left else 5, 0), textcoords="offset points",
-                   ha="right" if left else "left", va="center", fontsize=7.5)
-    a.set(xlabel="x (m)", ylabel="y (m)", xlim=(0, 40), ylim=(0, 30), xticks=[0, 10, 20, 30, 40],
-          yticks=[0, 10, 20, 30])
+        a.plot(*arr.positions.T, "s", color=C["ink"], ms=1.4)
+        a.annotate(arr.name, (arr.positions[:, 0].max(), arr.y), xytext=(4, 0),
+                   textcoords="offset points", ha="left", va="center", fontsize=7.5)
+    a.set(xlabel="x (m)", ylabel="y (m)", xlim=(0, 120), ylim=(0, 50),
+          xticks=np.arange(0, 121, 20), yticks=[0, 25, 50])
     a.set_aspect("equal")
     pf.colorbar(fig, m, a, "η (mm)")
     a.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, fontsize=7, frameon=False,
              borderaxespad=0.2)
 
-    b.grid(True)
-    for k, (arr, p) in enumerate(zip(arrays, pred)):
-        b.plot(tr.arrivals[k], p, pf.MARKERS[k], color=pf.CYCLE[k], ms=3.2, mfc="none", mew=0.8,
-               ls="none", label=f"Array {arr.name}")
-    lo, hi = 3.5, 9.5
-    pf.one_to_one(b, lo, hi, color=C["ink"], label="1:1")
-    b.set(xlabel="Picked arrival (s)", ylabel="Fitted wake arrival (s)", xticks=[4, 6, 8],
-          yticks=[4, 6, 8])
-    leg = pf.legend(b, loc="lower right", last=["1:1"])
-    b.text(0.04, 0.96, f"RMS = {1e3 * tr.residual_rms:.0f} ms", transform=b.transAxes,
+    # b: array A pressure records with the cusp-line picks
+    arr = arrays[0]
+    t, p = arr.time, arr.dynamic_pressure
+    sel = (t > 8) & (t < 34)
+    for k in range(arr.n_sensors):
+        b.plot(t[sel], p[k, sel], color=pf.CYCLE[0], lw=0.5, alpha=0.6)
+    for tk in tr.arrivals[0]:
+        b.axvline(tk, color=C["red"], lw=0.5)
+    b.set(xlabel="Time (s)", ylabel="p$_{dyn}$ (Pa)", xlim=(8, 34), xticks=[10, 20, 30],
+          ylim=(-700, 900))
+    b.text(0.02, 0.96, f"Array {arr.name}, z = {abs(arr.z):g} m", transform=b.transAxes,
            ha="left", va="top", fontsize=7.5)
-    pf.panel_labels([a, b])
+    b.text(min(tr.arrivals[0]) - 0.4, 0.96, "Cusp line", transform=b.get_xaxis_transform(),
+           ha="right", va="top", fontsize=7.5, color=C["red"])
+
+    c.grid(True)
+    for k, (ar, pr) in enumerate(zip(arrays, pred)):
+        c.plot(tr.arrivals[k], pr, pf.MARKERS[k], color=pf.CYCLE[k], ms=3.2, mfc="none", mew=0.8,
+               ls="none", label=f"Array {ar.name}")
+    lo, hi = 26, 44
+    pf.one_to_one(c, lo, hi, color=C["ink"], label="1:1")
+    c.set(xlabel="Picked cusp passage (s)", ylabel="Fitted (s)", xticks=[30, 35, 40],
+          yticks=[30, 35, 40], xlim=(lo, hi), ylim=(lo, hi))
+    pf.legend(c, loc="upper left", last=["1:1"], fontsize=6.5)
+    c.text(0.96, 0.04, f"RMS = {1e3 * tr.residual_rms:.0f} ms", transform=c.transAxes,
+           ha="right", va="bottom", fontsize=7.5)
+    pf.panel_labels([a, b, c])
     pf.save(fig, "fig06_boat_tracking", outdir=OUT)
 
 

@@ -23,23 +23,22 @@ dimensions, displacement, prismatic distribution and LCB; the finer details
 of the section shapes are approximate. Hull.coefficients() reports the values
 actually achieved on the grid.
 
-Coupling to the solver
-----------------------
-At every point the water displaced by the hull changes as the boat passes;
-that rate is fed to the solver as the volume source q = dD/dt, where
-D(x, y, t) is the hull draft below the still surface. Water is pushed out
-ahead of the bow and flows back behind the stern; the source integrates to
-zero, so the boat adds no net water.
+Coupling to the solvers
+-----------------------
+Dispersive hydar.spectral.SpectralSolver (recommended, used in case study 2):
+the hull pushes on the surface as a pressure patch, P/(rho g) = D(x, y, t),
+the hull draft below the still surface (Boat.pressure_head). The wake is the
+full linear Kelvin pattern: transverse and diverging waves inside a wedge of
+half-angle 19.47 deg. HYDAR tracks it with hydar.locate.track_boat.
 
-The depth Froude number Fr = U / sqrt(g h) decides what the arrays see:
+Shallow-water hydar.solver.Solver: the rate at which the hull displaces water
+is fed in as the volume source q = dD/dt (Boat.source). This model is
+non-dispersive, so with depth Froude number Fr = U / sqrt(g h):
 
-* Fr > 1 (supercritical): the boat outruns its own waves and drags a V-shaped
-  wake, a Mach cone with half-angle arcsin(1/Fr). HYDAR tracks this regime
-  (hydar.locate.track_boat).
-* Fr < 1 (subcritical): in this linear, non-dispersive model the boat only
-  carries a local depression with it and radiates no wake. Real boats in
-  deep water make a dispersive Kelvin wake, which this solver cannot
-  represent.
+* Fr > 1 (supercritical): the boat drags a Mach cone of half-angle
+  arcsin(1/Fr); track it with track_boat(..., wake="mach").
+* Fr < 1 (subcritical): the boat only carries a local depression with it and
+  radiates no wake. Use the SpectralSolver instead.
 """
 
 from __future__ import annotations
@@ -211,6 +210,8 @@ class Boat:
         self._ready = True
 
     def source(self, solver):
+        if not hasattr(solver, "u"):      # spectral solver: forced by pressure_head
+            return None
         if not self._ready:
             self._attach(solver)
         t0, t1 = solver.t, solver.t + solver.dt
@@ -230,6 +231,24 @@ class Boat:
         X, Y = np.meshgrid(gr.x[sl[0]], gr.y[sl[1]], indexing="ij")
         self._q[sl] = (self.draft_field(X, Y, t1) - self.draft_field(X, Y, t0)) / solver.dt
         return self._q
+
+    def pressure_head(self, solver, t):
+        """Surface pressure head P/(rho g) = D for hydar.spectral.SpectralSolver.
+
+        Returns (slices, values) on the box around the hull, or None.
+        """
+        if t <= self.t_start:
+            return None
+        gr = solver.grid
+        p = self.position(t)
+        R = 0.5 * max(self.length, self.beam) + 2 * gr.dx
+        i = np.nonzero(np.abs(gr.x - p[0]) <= R)[0]
+        j = np.nonzero(np.abs(gr.y - p[1]) <= R)[0]
+        if i.size == 0 or j.size == 0:
+            return None
+        sl = (slice(i[0], i[-1] + 1), slice(j[0], j[-1] + 1))
+        X, Y = np.meshgrid(gr.x[sl[0]], gr.y[sl[1]], indexing="ij")
+        return sl, self.draft_field(X, Y, t)
 
     def advance(self, solver) -> None:
         p = self.position(solver.t)

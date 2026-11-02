@@ -155,8 +155,52 @@ def locate(arrays, c: float, t0: float | None = None, fraction: float = 0.1,
 
 
 # ---------------------------------------------------------------------------
-# Moving source: track a supercritical boat from its V-shaped wake
+# Moving source: track a boat from its wake
 # ---------------------------------------------------------------------------
+KELVIN_HALF_ANGLE = float(np.degrees(np.arcsin(1.0 / 3.0)))   # 19.47 deg
+
+
+def pick_wake(t: np.ndarray, p: np.ndarray, band: tuple = (0.25, 3.0),
+              fraction: float = 0.66, window: float = 1.0,
+              t_start: float = 0.0, t_end: float | None = None) -> np.ndarray:
+    """Time the cusp line of a Kelvin wake passes each sensor [s].
+
+    Near the cusp line the wake amplitude follows an Airy function across the
+    line, |Ai(-zeta)|: it grows from zero ahead of the line, is Ai(0) = 0.355
+    on it and peaks at 0.536 just behind it. So the cusp passes when the wave
+    envelope first reaches 0.355/0.536 = 0.66 of its first maximum.
+
+    The record is band-passed (band, Hz), its Hilbert envelope smoothed over
+    `window` seconds, the first envelope maximum above half the largest one
+    found, and the last crossing of `fraction` of it before that maximum
+    returned (interpolated between samples). A first-threshold pick does not
+    work for a wake: the oscillating signal crosses any threshold at a
+    different wave crest from sensor to sensor.
+    """
+    from scipy.ndimage import uniform_filter1d
+    from scipy.signal import butter, hilbert, sosfiltfilt
+
+    fs = 1.0 / (t[1] - t[0])
+    win = (t >= t_start) & (t <= (t[-1] if t_end is None else t_end))
+    tw = t[win]
+    sos = butter(2, band, "bandpass", fs=fs, output="sos")
+    out = np.full(p.shape[0], np.nan)
+    for k, x in enumerate(np.atleast_2d(p)):
+        env = uniform_filter1d(np.abs(hilbert(sosfiltfilt(sos, x))), max(int(fs * window), 1))[win]
+        peaks = np.nonzero((env[1:-1] >= env[:-2]) & (env[1:-1] > env[2:]) &
+                           (env[1:-1] > 0.5 * env.max()))[0] + 1
+        if peaks.size == 0:
+            continue
+        m = peaks[0]
+        thr = fraction * env[m]
+        below = np.nonzero(env[:m] < thr)[0]
+        if below.size == 0:
+            continue
+        n = below[-1]
+        out[k] = tw[n] + (thr - env[n]) / (env[n + 1] - env[n]) * (tw[n + 1] - tw[n])
+    return out
+
+
 @dataclass
 class BoatTrack:
     """Constant-velocity boat track estimated from wake arrivals."""
@@ -164,9 +208,10 @@ class BoatTrack:
     p0: np.ndarray          # boat position at t = 0 [m]
     heading_deg: float      # direction of travel, degrees counter-clockwise from +x
     speed: float            # [m/s]
-    mach: float             # speed / wave speed (depth Froude number)
+    half_angle_deg: float   # half-angle of the wake front used in the fit
     residual_rms: float     # [s]
     arrivals: list          # per-array arrival times [s]
+    wake: str = "kelvin"
 
     @property
     def direction(self) -> np.ndarray:
@@ -177,42 +222,68 @@ class BoatTrack:
         """Estimated boat position at time(s) t."""
         return self.p0 + np.multiply.outer(np.asarray(t, float) * self.speed, self.direction)
 
-    @property
-    def wake_half_angle_deg(self) -> float:
-        return float(np.degrees(np.arcsin(1.0 / self.mach)))
-
     def __str__(self) -> str:
-        return (f"speed {self.speed:.2f} m/s (Fr = {self.mach:.2f}), heading {self.heading_deg:.1f} deg, "
+        return (f"speed {self.speed:.2f} m/s, heading {self.heading_deg:.1f} deg, "
                 f"position at t=0 ({self.p0[0]:.2f}, {self.p0[1]:.2f}) m, "
-                f"wake half-angle {self.wake_half_angle_deg:.1f} deg, rms residual {1e3 * self.residual_rms:.0f} ms")
+                f"{self.wake} wake half-angle {self.half_angle_deg:.1f} deg, "
+                f"rms residual {1e3 * self.residual_rms:.0f} ms")
 
 
-def wake_arrival(r: np.ndarray, p0, heading_deg: float, speed: float, c: float) -> np.ndarray:
-    """Time the Mach-cone wake of a boat on a straight track first reaches points r.
+def wake_arrival(r: np.ndarray, p0, heading_deg: float, speed: float,
+                 c: float | None = None, half_angle_deg: float | None = None) -> np.ndarray:
+    """Time the wake front of a boat on a straight track reaches points r.
 
-    A boat at p(t) = p0 + U t e with U > c trails a cone of half-angle
-    mu = arcsin(c/U). A point a distance s along the track and d to the side
-    is reached at t = (s + d * sqrt(M**2 - 1)) / U, with M = U/c.
+    The front is a V of half-angle mu trailing the boat at p(t) = p0 + U t e.
+    A point a distance s along the track and d to the side is reached at
+
+        t = (s + d * cot(mu)) / U.
+
+    Kelvin wake (default): mu = arcsin(1/3) = 19.47 deg, cot(mu) = 2*sqrt(2),
+    for any speed (deep water). Mach cone of a supercritical boat in the
+    shallow-water model: pass c, then mu = arcsin(c/U).
     """
     th = np.radians(heading_deg)
     e = np.array([np.cos(th), np.sin(th)])
     rel = np.atleast_2d(r) - np.asarray(p0)
     s = rel @ e
     d = np.abs(rel[:, 0] * e[1] - rel[:, 1] * e[0])
-    M = speed / c
-    return (s + d * np.sqrt(max(M * M - 1.0, 0.0))) / speed
+    if c is not None and half_angle_deg is None:
+        M = speed / c
+        cot = np.sqrt(max(M * M - 1.0, 0.0))
+    else:
+        cot = 1.0 / np.tan(np.radians(KELVIN_HALF_ANGLE if half_angle_deg is None else half_angle_deg))
+    return (s + d * cot) / speed
 
 
-def track_boat(arrays, c: float, fraction: float = 0.2, t_start: float = 0.0,
-               t_end: float | None = None) -> BoatTrack:
+def track_boat(arrays, c: float | None = None, wake: str = "kelvin", fraction: float | None = None,
+               t_start: float = 0.0, t_end: float | None = None) -> BoatTrack:
     """HYDAR for a moving boat: fit a straight, constant-speed track.
 
-    Picks the first wake arrival at every sensor of every array, then fits
-    the boat's position at t = 0, heading and speed so that the predicted
-    Mach-cone arrival times (wake_arrival) match the picks in a least-squares
-    sense. Needs a supercritical boat (speed > c) seen by at least two arrays.
+    wake="kelvin" (default, for hydar.spectral.SpectralSolver or real data):
+        picks the passage of the Kelvin cusp line at every sensor (pick_wake)
+        and fits fronts of half-angle 19.47 deg.
+    wake="mach" (supercritical boat in the shallow-water Solver; needs c):
+        picks the first arrival (pick_arrivals) and fits a Mach cone.
+
+    The boat's position at t = 0, heading and speed are found so that the
+    predicted front arrival times (wake_arrival) match the picks in a
+    least-squares sense, from several starting guesses. Needs the wake to
+    reach at least two arrays.
     """
-    picks = [pick_arrivals(a.time, a.dynamic_pressure, fraction, t_start, t_end) for a in arrays]
+    if wake == "kelvin":
+        picks = [pick_wake(a.time, a.dynamic_pressure, fraction=fraction or 0.66,
+                           t_start=t_start, t_end=t_end) for a in arrays]
+        half = KELVIN_HALF_ANGLE
+        lo, hi, guesses = 0.05, 100.0, (1.0, 3.0, 8.0)
+    elif wake == "mach":
+        if c is None:
+            raise ValueError("wake='mach' needs the shallow-water wave speed c")
+        picks = [pick_arrivals(a.time, a.dynamic_pressure, fraction or 0.2, t_start, t_end)
+                 for a in arrays]
+        half = None
+        lo, hi, guesses = 1.0001 * c, 10 * c, (1.2 * c, 1.6 * c, 2.2 * c)
+    else:
+        raise ValueError("wake must be 'kelvin' or 'mach'")
     pos = np.vstack([a.positions for a in arrays])
     arr = np.concatenate(picks)
     ok = np.isfinite(arr)
@@ -222,19 +293,20 @@ def track_boat(arrays, c: float, fraction: float = 0.2, t_start: float = 0.0,
 
     def resid(q):
         x0, y0, th, U = q
-        return wake_arrival(pos, (x0, y0), th, U, c) - arr
+        return wake_arrival(pos, (x0, y0), th, U, c if wake == "mach" else None, half) - arr
 
     centre, t_mean = pos.mean(axis=0), arr.mean()
     best = None
     for th in np.arange(0, 360, 30.0):
-        for U in (1.2 * c, 1.6 * c, 2.2 * c):
+        for U in guesses:
             e = np.array([np.cos(np.radians(th)), np.sin(np.radians(th))])
             p_init = centre - e * U * t_mean
             res = least_squares(resid, [*p_init, th, U],
-                                bounds=([-np.inf, -np.inf, -np.inf, 1.0001 * c],
-                                        [np.inf, np.inf, np.inf, 10 * c]))
+                                bounds=([-np.inf, -np.inf, -np.inf, lo], [np.inf, np.inf, np.inf, hi]))
             if best is None or res.cost < best.cost:
                 best = res
     x0, y0, th, U = best.x
-    return BoatTrack(np.array([x0, y0]), float(th % 360), float(U), float(U / c),
-                     float(np.sqrt(np.mean(best.fun ** 2))), picks)
+    if wake == "mach":
+        half = float(np.degrees(np.arcsin(min(c / U, 1.0))))
+    return BoatTrack(np.array([x0, y0]), float(th % 360), float(U), float(half),
+                     float(np.sqrt(np.mean(best.fun ** 2))), picks, wake)

@@ -1,9 +1,9 @@
-"""Series 60 hull geometry and HYDAR boat tracking."""
+"""Series 60 hull geometry and HYDAR boat tracking (Mach cone and Kelvin wake)."""
 
 import numpy as np
 import pytest
 
-from hydar import Boat, Grid, SensorArray, Solver, track_boat, wake_arrival
+from hydar import Boat, Grid, SensorArray, Solver, SpectralSolver, track_boat, wake_arrival
 from hydar.boat import SERIES60, Series60Hull
 
 
@@ -26,6 +26,12 @@ def test_boat_adds_no_net_water():
     assert sim.volume() == pytest.approx(boat.volume, rel=0.03)
 
 
+def test_kelvin_wake_arrival_geometry():
+    # the Kelvin cusp line (19.47 deg) passes a point when the boat is 2*sqrt(2)*d past it
+    t = wake_arrival(np.array([[10.0, 3.0]]), (0.0, 0.0), 0.0, 2.0)
+    assert t[0] == pytest.approx((10 + 3 * 2 * np.sqrt(2)) / 2)
+
+
 def test_wake_arrival_geometry():
     # a point abeam of the track is reached when the boat is d*sqrt(M^2-1) past it
     t = wake_arrival(np.array([[10.0, 3.0]]), (0.0, 0.0), 0.0, 6.0, 3.0)
@@ -43,8 +49,26 @@ def test_track_supercritical_boat():
     boat = Boat(speed=5.0, x=-2.5, y=9.0, heading_deg=5.0)
     sim.add(boat)
     sim.run(9.0)
-    tr = track_boat(arrays, c=sim.c)
+    tr = track_boat(arrays, c=sim.c, wake="mach")
     assert tr.speed == pytest.approx(5.0, rel=0.03)
     assert tr.heading_deg == pytest.approx(5.0, abs=1.0)
     bow = boat.position(4.0) + 0.5 * boat.length * boat.e
     assert np.linalg.norm(tr.position(4.0) - bow) < 0.5
+
+
+@pytest.mark.slow
+def test_track_boat_from_kelvin_wake():
+    grid = Grid(lx=90.0, ly=40.0, dx=0.15, n_pml=60)
+    sim = SpectralSolver(grid, depth=3.0)
+    arrays = [SensorArray("A", 50.0, 10.0, z=-0.4, pressure_model="solver"),
+              SensorArray("B", 62.0, 11.0, z=-0.4, pressure_model="solver"),
+              SensorArray("C", 52.0, 30.0, z=-0.4, pressure_model="solver")]
+    for a in arrays:
+        sim.add(a)
+    boat = Boat(speed=3.0, x=-7.0, y=20.0, heading_deg=0.0, ramp=4.0)
+    sim.add(boat)
+    sim.run(36.0)
+    tr = track_boat(arrays)
+    assert tr.speed == pytest.approx(3.0, rel=0.05)
+    assert tr.heading_deg == pytest.approx(0.0, abs=2.0) or tr.heading_deg == pytest.approx(360.0, abs=2.0)
+    assert np.linalg.norm(tr.position(20.0) - boat.position(20.0)) < 2.5
