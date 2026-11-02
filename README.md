@@ -1,5 +1,7 @@
 # HYDAR: Hydrodynamic Detection and Ranging
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23881055.svg)](https://doi.org/10.5281/zenodo.23881055)
+
 <p align="center"><img src="docs/img/hydar_hero.gif" alt="A drone drops a sphere, the waves wash over four sensor arrays, and red lasers trace the HYDAR fix back to the drop point" width="720"></p>
 
 **HYDAR** locates objects in water from the surface waves they make. Arrays of pressure sensors record the passing waves, and the **time of flight** of the wave front gives the **direction and distance** from each array's centre to the source. HYDAR works like radar or sonar, but its signal is a water wave rather than an electromagnetic or acoustic echo.
@@ -291,7 +293,25 @@ HYDAR was conceived and created by **Jeff Tuhtan**.
 * GitHub: [@jtuhtan](https://github.com/jtuhtan)
 * Questions, ideas and bug reports: please [open an issue](https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging/issues)
 
-If you use HYDAR in your work, please credit the author and link to this repository.
+## How to cite
+
+HYDAR v1.0.0 is archived on Zenodo with the DOI [10.5281/zenodo.23881055](https://doi.org/10.5281/zenodo.23881055). If you use HYDAR in your work, please cite it as:
+
+> Tuhtan, J. (2026). *HYDAR: Hydrodynamic Detection and Ranging* (Version v1.0.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23881055
+
+```bibtex
+@software{tuhtan_2026_hydar,
+  author    = {Tuhtan, Jeff},
+  title     = {{HYDAR: Hydrodynamic Detection and Ranging}},
+  version   = {v1.0.0},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.23881055},
+  url       = {https://doi.org/10.5281/zenodo.23881055}
+}
+```
+
+GitHub also shows a "Cite this repository" button, built from [CITATION.cff](CITATION.cff).
 
 ## References
 
