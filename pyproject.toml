@@ -8,6 +8,8 @@ version = "1.0.0"
 description = "HYDAR: Hydrodynamic Detection and Ranging. Locate objects dropped into water from surface-wave pressure signals."
 readme = "README.md"
 authors = [{ name = "Jeff Tuhtan" }]
+keywords = ["hydrodynamics", "surface waves", "pressure sensors", "localization", "time of flight", "Kelvin wake", "underwater sensing"]
+license = { text = "CC-BY-4.0" }
 requires-python = ">=3.9"
 dependencies = ["numpy>=1.22", "scipy>=1.8", "matplotlib>=3.5"]
 
@@ -19,6 +21,7 @@ packages = ["hydar"]
 
 [project.urls]
 Homepage = "https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging"
+DOI = "https://doi.org/10.5281/zenodo.23881055"
 Issues = "https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging/issues"
 
 [tool.pytest.ini_options]

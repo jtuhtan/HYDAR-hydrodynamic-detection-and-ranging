@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use HYDAR, please cite it using the metadata below."
+type: software
+title: "HYDAR: Hydrodynamic Detection and Ranging"
+abstract: >-
+  HYDAR locates objects in water from the surface waves they make.
+  Arrays of pressure sensors record the passing waves, and the time of
+  flight of the wave front gives the direction and distance from each
+  array's centre to the source. This Python simulator includes a
+  shallow-water solver and a dispersive potential-flow solver, drop
+  objects, boats with a Series 60 hull, pressure sensor arrays, and
+  HYDAR localization for drops, boats and ships offshore.
+authors:
+  - family-names: Tuhtan
+    given-names: Jeff
+version: v1.0.0
+license: CC-BY-4.0
+date-released: "2026-11-02"
+doi: 10.5281/zenodo.23881055
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23881055
+    description: Zenodo archive of HYDAR v1.0.0
+repository-code: "https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging"
+url: "https://doi.org/10.5281/zenodo.23881055"
+keywords:
+  - hydrodynamics
+  - surface waves
+  - pressure sensors
+  - sensor arrays
+  - localization
+  - time of flight
+  - time difference of arrival
+  - Kelvin wake
+  - shallow-water equations
+  - potential flow
+  - underwater sensing
+  - Python
