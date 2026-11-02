@@ -307,8 +307,78 @@ def fig_boat(sim, arrays, boat, snap, tr, pred):
     pf.save(fig, "fig06_boat_tracking", outdir=OUT)
 
 
+# ------------------------------------------------------------------ fig 7 (Kelvin wake)
+def fig_vessel():
+    from hydar.kelvin import (KelvinShip, branch_frequencies, detect_wake, locate_vessel,
+                              record_passage, ridge_points, stacked_spectrogram)
+    DEPTH = 3.0
+    arr = SensorArray("H", 0.0, 0.0, z=-(DEPTH - 0.2), spacing=2.5, rotation_deg=22.5,
+                      pressure_model="airy")
+    course = 90.0 - 159.0
+    e = np.array([np.cos(np.radians(course)), np.sin(np.radians(course))])
+    n_port = np.array([-e[1], e[0]])
+    d_true, U_true, t_ab = 2500.0, 11.0, 300.0
+    p0 = -d_true * n_port - U_true * t_ab * e
+    ship = KelvinShip(speed=U_true, course_deg=course, x0=p0[0], y0=p0[1])
+    record_passage([arr], ship, t_end=1800.0, depth=DEPTH,
+                   wind={"hs": 0.15, "f_peak": 0.4, "mean_dir_deg": 112.5})
+    fix = locate_vessel(arr)
+    t, f, S = stacked_spectrogram(arr)
+    det = detect_wake(t, f, S)
+    pts = ridge_points(t, f, S, det[:2])
+
+    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 92 * pf.MM))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.45, 1], height_ratios=[0.8, 1.2])
+    a = fig.add_subplot(gs[0, 0])
+    b = fig.add_subplot(gs[1, 0], sharex=a)
+    c = fig.add_subplot(gs[:, 1])
+
+    a.grid(True)
+    a.plot(arr.time / 60, arr.dynamic_pressure[4] / 1000, color=C["dark"], lw=0.35)
+    a.set(ylabel="p$_{dyn}$ (kPa)", ylim=(-2.6, 2.6), yticks=[-2, 0, 2])
+    a.tick_params(labelbottom=False)
+    pf.shade_span(a, det[0] / 60, det[1] / 60, label="wake detected")
+
+    m = b.pcolormesh(t / 60, f, 10 * np.log10(S + 1e-8), vmin=-40, vmax=0, cmap="Greys",
+                     shading="auto", rasterized=True)
+    tt = np.linspace(0, 1800, 3000)
+    ft, fd = branch_frequencies(tt, fix.speed, fix.distance, fix.t_abeam)
+    b.plot(tt / 60, ft, color=C["red"], lw=1.0, label="Fitted Kelvin branches")
+    b.plot(tt / 60, fd, color=C["red"], lw=1.0)
+    b.plot(pts[:, 0] / 60, pts[:, 1], "o", ms=1.0, color=C["cyan"], mew=0, label="Ridge points")
+    b.set(xlabel="Time (min)", ylabel="Frequency (Hz)", ylim=(0.08, 0.5), xlim=(0, 29.5),
+          yticks=[0.1, 0.2, 0.3, 0.4, 0.5])
+    b.text(1, 0.47, "wind sea", fontsize=7.5, va="top", color=C["dark"])
+    b.text(22, 0.128, "transverse", fontsize=7.5, va="top", color=C["red"])
+    b.text(20.5, 0.315, "divergent", fontsize=7.5, va="bottom", ha="right", color=C["red"])
+    pf.colorbar(fig, m, b, "dB", orientation="vertical")
+
+    c.grid(True)
+    tk = np.linspace(-300, 1150, 50)
+    P = ship.position(tk) / 1000
+    Q = fix.position(tk) / 1000
+    c.plot(P[:, 0], P[:, 1], color=C["ink"], lw=1.0, label="True track (AIS)")
+    c.plot(Q[:, 0], Q[:, 1], color=C["red"], lw=1.2, ls="--", label="HYDAR track")
+    pc, qc = ship.position(fix.t_cusp) / 1000, fix.position(fix.t_cusp) / 1000
+    c.plot(*pc, "o", mfc="none", mec=C["ink"], ms=5, mew=0.9)
+    c.plot(*qc, "+", color=C["red"], ms=7, mew=1.3)
+    c.plot(0, 0, "s", color=C["blue"], ms=4, label="Sensor array")
+    c.annotate("", xy=1.2 * fix.cusp_direction, xytext=(0, 0),
+               arrowprops=dict(arrowstyle="<|-", color=C["cyan"], lw=1.0))
+    err = 1000 * np.linalg.norm(qc - pc)
+    c.plot([0, qc[0]], [0, qc[1]], color=C["red"], lw=0.6, ls=":")
+    c.text(qc[0] + 0.7, qc[1], f"ship when the cusp\nreached the array\n(error {err:.0f} m)",
+           fontsize=7, va="center", ha="left")
+    c.set(xlabel="x (km)", ylabel="y (km)", xlim=(-5, 5), ylim=(-9, 5), xticks=[-4, -2, 0, 2, 4])
+    c.set_aspect("equal")
+    c.legend(loc="upper right", fontsize=7)
+    pf.panel_labels([a, b, c])
+    pf.save(fig, "fig07_vessel_localization", outdir=OUT)
+    return fix
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["1", "2", "3", "4"]
+    which = sys.argv[1:] or ["1", "2", "3", "4", "5"]
     if "1" in which:
         fig_open_boundary()
     if "2" in which:
@@ -321,3 +391,5 @@ if __name__ == "__main__":
         fig_hull()
     if "4" in which:
         fig_boat(*boat_scene())
+    if "5" in which:
+        print(fig_vessel())

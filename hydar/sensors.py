@@ -75,6 +75,7 @@ class SensorArray:
     spacing  : distance between neighbouring sensors [m]
     fs       : sampling rate [Hz]
     pressure_model : "hydrostatic" or "airy" (see module docstring)
+    rotation_deg   : rotation of the grid, degrees counter-clockwise
     """
 
     name: str
@@ -86,6 +87,7 @@ class SensorArray:
     spacing: float = 1.0
     fs: float = 100.0
     pressure_model: str = "hydrostatic"
+    rotation_deg: float = 0.0
     _t: list = field(init=False, default_factory=list, repr=False)
     _eta: list = field(init=False, default_factory=list, repr=False)
 
@@ -93,8 +95,10 @@ class SensorArray:
         ox = (np.arange(self.nx) - (self.nx - 1) / 2) * self.spacing
         oy = (np.arange(self.ny) - (self.ny - 1) / 2) * self.spacing
         OX, OY = np.meshgrid(ox, oy, indexing="ij")
+        r = np.radians(self.rotation_deg)
+        R = np.array([[np.cos(r), -np.sin(r)], [np.sin(r), np.cos(r)]])
         #: sensor offsets from the centre, shape (n_sensors, 2)
-        self.offsets = np.column_stack([OX.ravel(), OY.ravel()])
+        self.offsets = np.column_stack([OX.ravel(), OY.ravel()]) @ R.T
         #: absolute sensor positions, shape (n_sensors, 2)
         self.positions = self.offsets + [self.x, self.y]
         self._w = None
@@ -169,6 +173,24 @@ class SensorArray:
     def pressure(self) -> np.ndarray:
         """Total gauge pressure (hydrostatic + dynamic) [Pa]."""
         return self._rho * self._g * (-self.z) + self.dynamic_pressure
+
+    def load(self, t: np.ndarray, eta: np.ndarray, depth: float, g: float = 9.81,
+             rho: float = 1000.0) -> None:
+        """Fill the array with an externally computed surface elevation record.
+
+        t   : (n,) times [s], starting at or after 0
+        eta : (n_sensors, n) surface elevation above each sensor [m]
+        Used for wave fields that do not come from the Solver, e.g. hydar.kelvin.
+        """
+        if not -depth < self.z <= 0:
+            raise ValueError(f"{self.name}: z must lie in (-{depth}, 0]")
+        eta = np.asarray(eta, dtype=float)
+        if eta.shape[0] != self.n_sensors:
+            raise ValueError("eta must have one row per sensor")
+        self._t = list(np.asarray(t, dtype=float))
+        self._eta = list(eta.T)
+        self._depth, self._g, self._rho = depth, g, rho
+        self._w = ()  # mark as filled (no solver coupling)
 
     def to_dict(self) -> dict:
         """Recorded data as plain arrays (e.g. for np.savez)."""

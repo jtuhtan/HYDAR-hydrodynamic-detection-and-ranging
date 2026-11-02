@@ -66,6 +66,7 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 | `examples/02_drop_sphere.py` | A floating sphere (600 kg/m³) heaves and settles at its Archimedes draft. A sinking one (2500 kg/m³) falls to the bottom. Both radiate rings of waves. |
 | `examples/03_hydar_localization.py` | The full HYDAR pipeline with four arrays, both with a known drop time and with an unknown one. |
 | `examples/04_boat_tracking.py` | Case study 2: a 4.5 m Series 60 boat crosses the domain at 5 m/s, and HYDAR tracks it from its wake (about 1 minute). |
+| `examples/05_vessel_localization.py` | Case study 3: a ferry 2.5 km offshore located from its Kelvin wake with one 3 × 3 seabed array, after Rätsep et al. (2020, 2021) (about 1 minute). |
 | `examples/make_boat_animation.py` | Renders the case study 2 animation from a real simulation (needs ffmpeg, about 5 minutes). The red lasers end where the fitted HYDAR track places the boat at the moment each array first detects its wake. |
 | `examples/make_hero_animation.py` | Renders the animation at the top of this page from a real simulation (needs ffmpeg, about 5 minutes). The waves, arrival times and the final fix are all computed by `hydar`; the drone and splash are decoration. |
 | `docs/make_figures.py` | Regenerates the four figures below (PNG at 600 dpi, plus editable PDF and SVG) in the author's paper figure style (`docs/paperfig.py`), sized for a 170 mm text width. |
@@ -110,6 +111,44 @@ print(track.position(5.0))            # where the boat was at t = 5 s
 **Figure 5.** HYDAR tracking of the boat. **a**, surface elevation 5 s after the start, showing the V-shaped wake (Mach cone, half-angle 38.8°). The HYDAR track (dashed red) lies on the true track of the bow (black). **b**, wake arrival times picked at all 36 sensors against those predicted by the fitted track; the RMS misfit is 13 ms.
 
 **How the boat tracking works.** A boat moving at speed U > c trails a Mach cone of half-angle μ = arcsin(c/U). A point a distance s along the track and d to the side is first reached by the wake at t = (s + d √(M² − 1)) / U, with M = U/c. `track_boat` picks the first wake arrival at every sensor, then fits the boat's position at t = 0, its heading and its speed so that these predicted times match the picks, using least squares from several starting guesses. The wake starts at the bow, so the fitted track follows the bow rather than the hull centre.
+
+---
+
+## Case study 3: locating a passing ferry from its Kelvin wake
+
+This case study follows the field work of Rätsep et al. ([2020](https://doi.org/10.1175/JTECH-D-19-0192.1), [2021](https://doi.org/10.1016/j.oceaneng.2021.109156)) in Tallinn Bay. A 3 × 3 grid of seabed pressure sensors (2.5 m spacing, 0.2 m above the bed in 3 m of water, 100 Hz) records the wakes of fast ferries passing about 3 km offshore. These ships are slower than the long-wave speed of the deep fairway, so they make a **dispersive Kelvin wake**, which the shallow-water solver cannot represent. The wake is therefore synthesized from linear deep-water theory by integrating the Havelock wave spectrum numerically, so the cusp and both wave branches are exact. A random wind sea (H_s = 0.15 m, 0.4 Hz) and sensor noise are added, and the pressure at the sensor depth uses the Airy depth response.
+
+In the example, a ferry sails at 11 m/s (21 kn) on a course of 159°, 2.5 km from the array. The analysis sees only the recorded pressures and follows the steps of the papers:
+
+1. **Detection.** Spectrograms of five sensors (four corners and the centre) are averaged, which suppresses incoherent noise ([2020](https://doi.org/10.1175/JTECH-D-19-0192.1)). The wake is flagged where its band power rises above the background.
+2. **Speed, distance and time abeam from the spectrogram.** A fixed observer a distance d from the track sees two branches: transverse waves whose frequency falls towards f_t = g/(2πU), and divergent waves whose frequency rises. Both start at the cusp, at √(3/2)·f_t. Fitting the two stationary-phase branches to the spectrogram ridge gives U, d and the time the ship passed abeam. The upper divergent branch is hidden under the wind sea, as noted in the papers, so the fit uses the band below it.
+3. **Wake direction from time delays.** Cross-correlating all 36 sensor pairs gives the delay of the same waves between sensors. A plane-wave fit to those delays gives the direction the cusp waves travel ([2021](https://doi.org/10.1016/j.oceaneng.2021.109156)).
+4. **Course and position.** At the cusp, the waves travel at the Kelvin angle 35°16′ to the ship's course, which leaves two candidate courses. In the field this ambiguity was resolved with the coastline. Here the direction of the late transverse waves, which travel along the course, picks the right one. The distance d and the side of the track the waves came from then place the ship.
+
+| | True | HYDAR (case study 3) |
+|---|---|---|
+| Speed | 11.00 m/s | 10.99 m/s |
+| Distance from track | 2500 m | 2390 m |
+| Course | −69.0° (159° nautical) | −67.1° |
+| Ship position when the cusp reaches the array | | 463 m off |
+
+For comparison, the field study reported positions mostly within 0.5 km of the AIS positions, with about 400 m in its example case.
+
+```python
+from hydar import SensorArray
+from hydar.kelvin import KelvinShip, record_passage, locate_vessel
+
+array = SensorArray("H", 0, 0, z=-2.8, spacing=2.5, rotation_deg=22.5, pressure_model="airy")
+ship = KelvinShip(speed=11.0, course_deg=-69.0, x0=..., y0=...)     # see examples/05
+record_passage([array], ship, t_end=1800, depth=3.0, wind={"hs": 0.15, "f_peak": 0.4})
+fix = locate_vessel(array)       # speed, distance, course, ship position at any time
+```
+
+![Figure 6](docs/img/fig07_vessel_localization.png)
+
+**Figure 6.** Case study 3, after Rätsep et al. (2020, 2021). **a**, dynamic pressure at the centre sensor: wind-sea noise, then the ferry wake 15 min after the ship passed abeam. **b**, spectrogram averaged over five sensors. The fitted Kelvin branches (red) follow the ridge points (cyan); the upper divergent branch disappears under the wind sea. **c**, the true track (black) and the HYDAR track (dashed red) from the single 3 × 3 array (blue). The arrow shows the measured direction of the cusp waves; the markers show the ship when the cusp reached the array, true (circle) and estimated (cross).
+
+**Assumptions.** Deep water is assumed along the whole wave path, so refraction and shoaling into the 3 m deep nearshore are ignored, and the hull is represented by a smooth amplitude spectrum rather than a specific ship. The spectrogram relations used here are derived in `hydar/kelvin.py` from stationary phase; the papers state the same physics in terms of the cusp and limiting transverse frequencies.
 
 ---
 
@@ -194,11 +233,13 @@ hydar/
   solver.py     2D shallow-water solver with PML walls
   drop.py       DropObject (sphere sinks or floats, two-way coupled source)
   boat.py       Boat with Series 60 (or elliptical) hull moving on a straight track
+  kelvin.py     Kelvin wake synthesis, wind sea, spectrogram chirp fit, wake direction,
+                vessel localization (case study 3)
   sensors.py    SensorArray (3x3 at 1 m, 100 Hz, x/y/z placement, depth response)
   locate.py     HYDAR: arrival picking, TDOA bearing, TOF range, multi-array fusion,
                 and boat tracking from the wake (track_boat)
   plotting.py   time-series and map plots
-examples/       runnable scripts (01 to 04) and the hero animation
+examples/       runnable scripts (01 to 05) and the two animations
 tests/          pytest suite
 docs/img/       figures used in this README
 ```
@@ -215,5 +256,9 @@ If you use HYDAR in your work, please credit the author and link to this reposit
 ## References
 
 Bérenger, J.-P. (1994). A perfectly matched layer for the absorption of electromagnetic waves. *Journal of Computational Physics*, 114(2), 185–200.
+
+Rätsep, M., Parnell, K. E., Soomere, T., Kruusmaa, M., Ristolainen, A., & Tuhtan, J. A. (2020). Using spectrograms from underwater total pressure sensors to detect passing vessels in a coastal environment. *Journal of Atmospheric and Oceanic Technology*, 37(8), 1353–1363. https://doi.org/10.1175/JTECH-D-19-0192.1
+
+Rätsep, M., Parnell, K. E., Soomere, T., Kruusmaa, M., Ristolainen, A., & Tuhtan, J. A. (2021). Surface vessel localization from wake measurements using an array of pressure sensors in the littoral zone. *Ocean Engineering*, 233, 109156. https://doi.org/10.1016/j.oceaneng.2021.109156
 
 Todd, F. H. (1963). *Series 60: Methodical experiments with models of single-screw merchant ships*. David Taylor Model Basin Report 1712, Washington, DC.
