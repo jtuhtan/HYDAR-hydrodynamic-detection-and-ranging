@@ -9,6 +9,7 @@ description = "HYDAR: Hydrodynamic Detection and Ranging. Locate objects dropped
 readme = "README.md"
 authors = [{ name = "Jeff Tuhtan" }]
 keywords = ["hydrodynamics", "surface waves", "pressure sensors", "localization", "time of flight", "Kelvin wake", "underwater sensing"]
+license = { text = "CC-BY-4.0" }
 requires-python = ">=3.9"
 dependencies = ["numpy>=1.22", "scipy>=1.8", "matplotlib>=3.5"]
 

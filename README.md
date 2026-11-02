@@ -313,6 +313,10 @@ HYDAR v1.0.0 is archived on Zenodo with the DOI [10.5281/zenodo.23881055](https:
 
 GitHub also shows a "Cite this repository" button, built from [CITATION.cff](CITATION.cff).
 
+## License
+
+HYDAR is released under the [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/) license (CC BY 4.0), the same licence as its [Zenodo record](https://doi.org/10.5281/zenodo.23881055). You may use, change and share it, including for commercial work, as long as you credit the author. See [LICENSE](LICENSE).
+
 ## References
 
 Bérenger, J.-P. (1994). A perfectly matched layer for the absorption of electromagnetic waves. *Journal of Computational Physics*, 114(2), 185–200. https://doi.org/10.1006/jcph.1994.1159
