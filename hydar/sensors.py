@@ -80,6 +80,9 @@ class SensorArray:
     fs       : sampling rate [Hz]
     pressure_model : "hydrostatic", "airy" or "solver" (see module docstring)
     rotation_deg   : rotation of the grid, degrees counter-clockwise
+    layout   : optional (n_sensors, 2) sensor offsets from the centre [m], before
+               rotation. Overrides nx, ny and spacing; used for arrays whose
+               geometry was optimized (hydar.interferometry.design_array).
     """
 
     name: str
@@ -92,6 +95,7 @@ class SensorArray:
     fs: float = 100.0
     pressure_model: str = "hydrostatic"
     rotation_deg: float = 0.0
+    layout: np.ndarray | None = None
     _t: list = field(init=False, default_factory=list, repr=False)
     _eta: list = field(init=False, default_factory=list, repr=False)
 
@@ -99,10 +103,13 @@ class SensorArray:
         ox = (np.arange(self.nx) - (self.nx - 1) / 2) * self.spacing
         oy = (np.arange(self.ny) - (self.ny - 1) / 2) * self.spacing
         OX, OY = np.meshgrid(ox, oy, indexing="ij")
+        local = np.column_stack([OX.ravel(), OY.ravel()])
+        if self.layout is not None:
+            local = np.asarray(self.layout, dtype=float).reshape(-1, 2)
         r = np.radians(self.rotation_deg)
         R = np.array([[np.cos(r), -np.sin(r)], [np.sin(r), np.cos(r)]])
         #: sensor offsets from the centre, shape (n_sensors, 2)
-        self.offsets = np.column_stack([OX.ravel(), OY.ravel()]) @ R.T
+        self.offsets = local @ R.T
         #: absolute sensor positions, shape (n_sensors, 2)
         self.positions = self.offsets + [self.x, self.y]
         self._w = None
