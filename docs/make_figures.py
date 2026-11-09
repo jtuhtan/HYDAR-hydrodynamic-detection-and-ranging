@@ -403,8 +403,131 @@ def fig_vessel():
     return fix
 
 
+# ------------------------------------------------------------------ fig 8
+def fig_interferometry():
+    """Case study 4: array design, interferometric observations, track, benchmark."""
+    import csv
+    from hydar.interferometry import ci_pattern, design_array, grid_layout, observe, fit_track
+    from hydar.kelvin import KelvinShip, locate_vessel, record_passage
+
+    band = (0.07, 0.3)
+    base = grid_layout([-2.5, 0, 2.5], [-2.5, 0, 2.5])
+    d7 = design_array(band, max_aperture=7.08, min_spacing=0.5)
+    d20 = design_array(band, max_aperture=20.0, min_spacing=0.5)
+
+    DEPTH = 3.0
+    course = 90.0 - 159.0
+    e = np.array([np.cos(np.radians(course)), np.sin(np.radians(course))])
+    p0 = -2500.0 * np.array([-e[1], e[0]]) - 11.0 * 300.0 * e
+    ship = KelvinShip(speed=11.0, course_deg=course, x0=p0[0], y0=p0[1])
+    arr = SensorArray("H", 0.0, 0.0, z=-(DEPTH - 0.2), rotation_deg=22.5, pressure_model="airy",
+                      layout=d20.offsets)
+    record_passage([arr], ship, t_end=1800.0, depth=DEPTH,
+                   wind={"hs": 0.3, "f_peak": 0.4, "mean_dir_deg": 112.5})
+    fix = locate_vessel(arr)
+    obs = observe(arr, band, np.inf, window=120.0, hop=20.0)
+    ci = fit_track(obs)
+
+    rows = list(csv.DictReader(open(ROOT / "docs" / "data" / "ci_benchmark.csv")))
+
+    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 150 * pf.MM))
+    gs = fig.add_gridspec(3, 3, height_ratios=[1, 0.9, 1])
+    a = fig.add_subplot(gs[0, 0])
+    b = fig.add_subplot(gs[0, 1])
+    c = fig.add_subplot(gs[0, 2])
+    d = fig.add_subplot(gs[1, :2])
+    m = fig.add_subplot(gs[1:, 2])
+    f1 = fig.add_subplot(gs[2, 0])
+    f2 = fig.add_subplot(gs[2, 1])
+
+    # a: layouts
+    for off, col, mk, lab in ((base, C["dark"], "s", "Rätsep grid"), (d7.offsets, C["blue"], "o", "Optimal, 7.1 m"),
+                              (d20.offsets, C["red"], "^", "Optimal, 20 m")):
+        a.plot(off[:, 0], off[:, 1], mk, color=col, ms=3.5, mew=0, label=lab, ls="none")
+    a.set(xlabel="x (m)", ylabel="y (m)", xlim=(-11, 11), ylim=(-11, 11), xticks=[-10, 0, 10], yticks=[-10, 0, 10])
+    a.set_aspect("equal")
+    a.grid(True)
+
+    # b: correlation pattern at the top of the band, source at 0 deg
+    from hydar.interferometry import dispersion
+    k = dispersion(band[1])[0][0]
+    for off, col, lab in ((base, C["dark"], "Rätsep grid"), (d7.offsets, C["blue"], "Optimal, 7.1 m"),
+                          (d20.offsets, C["red"], "Optimal, 20 m")):
+        th, rho = ci_pattern(off, k, 0.0)
+        th = (np.degrees(th) + 180) % 360 - 180
+        o = np.argsort(th)
+        b.plot(th[o], rho[o], color=col, lw=0.9, label=lab)
+    b.set(xlabel="Direction (deg)", ylabel="Correlation ρ", xlim=(-180, 180), xticks=[-180, 0, 180],
+          ylim=(-0.2, 1.6), yticks=[0, 0.5, 1])
+    b.grid(True)
+    pf.legend(b, loc="upper center", fontsize=6, ncol=1)
+
+    # c: bearing bound vs footprint
+    fr = np.linspace(*band, 6)
+    from hydar.interferometry import evaluate_layout
+    names = ["Rätsep", "7 m", "20 m"]
+    vals = [evaluate_layout(o, band)[0] for o in (base, d7.offsets, d20.offsets)]
+    bars = c.bar(names, np.array(vals) / vals[0], color=[C["dark"], C["blue"], C["red"]], width=0.6)
+    pf.label_bars(c, bars, fmt="{:.2f}")
+    c.set(ylabel="Relative bearing bound", ylim=(0, 1.3), yticks=[0, 0.5, 1])
+
+    # d: observations in time and frequency
+    inl = ci.inliers
+    d.plot(obs.t[~inl] / 60, obs.f[~inl], "o", ms=1.6, mew=0, color=C["grey"], label="Rejected by the track fit")
+    d.plot(obs.t[inl] / 60, obs.f[inl], "o", ms=2.0, mew=0, color=C["red"], label="Used in the track fit")
+    d.set(xlabel="Time (min)", ylabel="Frequency (Hz)", xlim=(0, 30), ylim=(0.07, 0.4),
+          yticks=[0.1, 0.2, 0.3])
+    d.grid(True)
+    pf.legend(d, loc="upper left", fontsize=6.5)
+
+    # map
+    tk = np.linspace(-300, 1150, 50)
+    P, Q, R = ship.position(tk) / 1000, fix.position(tk) / 1000, ci.position(tk) / 1000
+    m.plot(P[:, 0], P[:, 1], color=C["ink"], lw=1.0, label="True track")
+    m.plot(Q[:, 0], Q[:, 1], color=C["grey"], lw=1.1, ls="--", label="Kelvin (case 3)")
+    m.plot(R[:, 0], R[:, 1], color=C["red"], lw=1.1, ls="--", label="Interferometry")
+    m.plot(0, 0, "s", color=C["blue"], ms=4, label="Sensor array")
+    m.set(xlabel="x (km)", ylabel="y (km)", xlim=(-5, 3), ylim=(-9, 4), xticks=[-4, -2, 0, 2])
+    m.set_aspect("equal")
+    m.grid(True)
+    pf.legend(m, loc="upper right", fontsize=6)
+
+    # benchmark panels
+    def curve(ax, case, geo, method, col, ls, lab):
+        hs = sorted({float(r["hs_m"]) for r in rows if r["case"] == case})
+        med, lo, hi = [], [], []
+        for h in hs:
+            sel = [r for r in rows if r["case"] == case and r["geometry"] == geo
+                   and r["method"] == method and float(r["hs_m"]) == h]
+            v = [float(r["track_rms_m"]) for r in sel if r["ok"] == "1"]
+            if len(v) < 0.5 * len(sel):          # fewer than half the runs gave a fix
+                med.append(np.nan), lo.append(np.nan), hi.append(np.nan)
+                continue
+            med.append(np.median(v)), lo.append(np.percentile(v, 25)), hi.append(np.percentile(v, 75))
+        ax.plot(hs, med, ls, color=col, lw=1.0, ms=3, label=lab)
+        ax.fill_between(hs, lo, hi, color=col, alpha=0.12, lw=0)
+
+    curve(f1, "ferry", "Ratsep 2.5 m grid", "kelvin", C["grey"], "s-", "Kelvin, Rätsep grid")
+    curve(f1, "ferry", "Ratsep 2.5 m grid", "interferometry", C["dark"], "o-", "Interf., Rätsep grid")
+    curve(f1, "ferry", "optimal, 20 m footprint", "interferometry", C["red"], "^-", "Interf., optimal 20 m")
+    f1.set(xlabel="Wind sea H$_s$ (m)", ylabel="Track RMS error (m)", ylim=(0, 1000), title="Ferry")
+    f1.grid(True)
+    pf.legend(f1, loc="upper left", fontsize=5.5)
+    curve(f2, "boat", "1 m grid", "kelvin", C["grey"], "s-", "Kelvin, 1 m grid")
+    curve(f2, "boat", "1 m grid", "interferometry", C["dark"], "o-", "Interf., 1 m grid")
+    curve(f2, "boat", "optimal, same footprint", "interferometry", C["red"], "^-", "Interf., optimal")
+    f2.set(xlabel="Wind sea H$_s$ (m)", ylabel="Track RMS error (m)", yscale="log", ylim=(0.3, 3000),
+           title="Boat")
+    f2.grid(True)
+    pf.legend(f2, loc="upper left", fontsize=5.5)
+
+    pf.panel_labels([a, b, c, d, m, f1, f2])
+    pf.save(fig, "fig08_interferometry", outdir=OUT)
+    return fix, ci
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["1", "2", "3", "4", "5"]
+    which = sys.argv[1:] or ["1", "2", "3", "4", "5", "6"]
     if "1" in which:
         fig_open_boundary()
     if "2" in which:
@@ -419,3 +542,5 @@ if __name__ == "__main__":
         fig_boat(*boat_scene())
     if "5" in which:
         print(fig_vessel())
+    if "6" in which:
+        print(*fig_interferometry(), sep="\n")

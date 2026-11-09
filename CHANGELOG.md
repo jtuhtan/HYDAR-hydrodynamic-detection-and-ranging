@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Case study 4: array design and vessel tracking by correlative interferometry** (`hydar.interferometry`). Tracks a vessel without Kelvin wake theory, from two general facts of linear waves: a wave of the steady pattern does not move relative to the source (n · V = c), and its energy travels from the source along a ray at the group velocity. Each 3 × 3 array measures wave directions by correlative interferometry (all 36 sensor pairs against a table of plane-wave phases); a robust fit (RANSAC, then a weighted Cauchy-loss least squares) gives the track and rejects the wind sea.
+- `design_array`: optimal 3 × 3 grid (free column and row positions) for a frequency band, minimizing the bearing Cramér-Rao bound subject to a sidelobe (ambiguity) limit, a footprint limit and a minimum spacing.
+- `wind_sea_head`: finite-depth wind sea as pressure head at the sensor depth, to add wind noise to `SpectralSolver` records.
+- `SensorArray(layout=...)` for arrays with any sensor positions.
+- `examples/06_array_design.py`, `examples/07_benchmark_interferometry.py`, `docs/data/ci_benchmark.csv`, Figure 7 and tests.
+
+### Changed
+
+- `kelvin.wave_direction` sizes its correlation lag window from the largest sensor separation instead of `spacing`, so it also works for non-uniform layouts. Results for regular grids are unchanged.
+
 ## v1.0.0 (2026-11-02)
 
 First release of HYDAR (Hydrodynamic Detection and Ranging), a Python simulator for locating objects in water from the surface waves they make, using arrays of pressure sensors.

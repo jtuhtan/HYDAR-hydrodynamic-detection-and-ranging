@@ -284,7 +284,8 @@ def wave_direction(array, t0: float, t1: float, band=(0.1, 0.25)):
     w = (t >= t0) & (t <= t1)
     x = np.array([sosfiltfilt(sos, pk)[w] for pk in p])
     n = len(x)
-    max_lag = int(array.fs * 2.0 * array.spacing * np.sqrt(2) / 2.0)   # > max delay at 2 m/s
+    span = max(np.linalg.norm(a - b) for a in array.positions for b in array.positions)
+    max_lag = int(array.fs * span / 2.0)   # > largest inter-sensor delay at 2 m/s
     rows, lags = [], []
     for i in range(n):
         for j in range(i + 1, n):
