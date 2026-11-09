@@ -386,7 +386,7 @@ HYDAR was conceived and created by **Jeff Tuhtan**.
 
 ## How to cite
 
-HYDAR v1.0.0 is archived on Zenodo with the DOI [10.5281/zenodo.23881055](https://doi.org/10.5281/zenodo.23881055). If you use HYDAR in your work, please cite it as:
+HYDAR v1.0.0 is archived on Zenodo with the DOI [10.5281/zenodo.23881055](https://doi.org/10.5281/zenodo.23881055). Version v1.1.0 adds case study 4; its own Zenodo DOI will be listed here once the release is archived. If you use HYDAR in your work, please cite it as:
 
 > Tuhtan, J. (2026). *HYDAR: Hydrodynamic Detection and Ranging* (Version v1.0.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23881055
 

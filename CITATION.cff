@@ -9,13 +9,14 @@ abstract: >-
   array's centre to the source. This Python simulator includes a
   shallow-water solver and a dispersive potential-flow solver, drop
   objects, boats with a Series 60 hull, pressure sensor arrays, and
-  HYDAR localization for drops, boats and ships offshore.
+  HYDAR localization for drops, boats and ships offshore, plus
+  array design and vessel tracking by correlative interferometry.
 authors:
   - family-names: Tuhtan
     given-names: Jeff
-version: v1.0.0
+version: v1.1.0
 license: CC-BY-4.0
-date-released: "2026-11-02"
+date-released: "2026-11-09"
 doi: 10.5281/zenodo.23881055
 identifiers:
   - type: doi
@@ -32,6 +33,8 @@ keywords:
   - time of flight
   - time difference of arrival
   - Kelvin wake
+  - correlative interferometry
+  - array design
   - shallow-water equations
   - potential flow
   - underwater sensing
