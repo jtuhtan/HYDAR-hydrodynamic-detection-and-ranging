@@ -1,14 +1,25 @@
 # Changelog
 
-## Unreleased
+## v1.1.0 (2026-11-09)
+
+Adds case study 4: a method that designs the 3 × 3 array geometry for correlative interferometry and detects and tracks a vessel **without Kelvin wake theory**, with a Monte Carlo benchmark against the Kelvin methods of case studies 2 and 3.
 
 ### Added
 
-- **Case study 4: array design and vessel tracking by correlative interferometry** (`hydar.interferometry`). Tracks a vessel without Kelvin wake theory, from two general facts of linear waves: a wave of the steady pattern does not move relative to the source (n · V = c), and its energy travels from the source along a ray at the group velocity. Each 3 × 3 array measures wave directions by correlative interferometry (all 36 sensor pairs against a table of plane-wave phases); a robust fit (RANSAC, then a weighted Cauchy-loss least squares) gives the track and rejects the wind sea.
+- **Case study 4: array design and vessel tracking by correlative interferometry** (`hydar.interferometry`). Tracks a vessel without Kelvin wake theory, from two general facts of linear waves: a wave of the steady pattern does not move relative to the source (n · V = c), and its energy travels from the source along a ray at the group velocity. Each 3 × 3 array measures wave directions by correlative interferometry (all 36 sensor pairs against a table of plane-wave phases); a robust fit (RANSAC, then a Cauchy-loss least squares; optional rho weighting) gives the track and rejects the wind sea.
 - `design_array`: optimal 3 × 3 grid (free column and row positions) for a frequency band, minimizing the bearing Cramér-Rao bound subject to a sidelobe (ambiguity) limit, a footprint limit and a minimum spacing.
 - `wind_sea_head`: finite-depth wind sea as pressure head at the sensor depth, to add wind noise to `SpectralSolver` records.
 - `SensorArray(layout=...)` for arrays with any sensor positions.
-- `examples/06_array_design.py`, `examples/07_benchmark_interferometry.py`, `docs/data/ci_benchmark.csv`, Figure 7 and tests.
+- `examples/06_array_design.py`: designs the optimal grids for the ferry band (same 7.1 m footprint as the Rätsep et al. grid, and a 20 m footprint), records the case study 3 ferry passage with each in a 0.3 m wind sea, and compares the Kelvin method with interferometry (about 2 minutes).
+- `examples/07_benchmark_interferometry.py`: 540 Monte Carlo runs over wind-sea heights for both vessel scenarios, geometries and methods; results in `docs/data/ci_benchmark.csv`.
+- README case study 4 with Figure 7, five tests in `tests/test_interferometry.py`, and three references (Fischler & Bolles 1981, Lighthill 1978, Van Trees 2002).
+
+### Case study 4 results
+
+| Scenario | Result |
+|---|---|
+| Ferry, one array 2.5 km away, wind sea 0 to 0.6 m | Interferometry better on every measure: course bias below 0.1° (Kelvin method about 2°), track error 3 to 9 times smaller (Hs 0.3 m: median 103 m with the optimal 20 m array vs 537 m), fixes in 300/300 runs (Kelvin 293/300). The optimal 20 m array lowers the error a further 9 to 22 % (median) |
+| Boat, four arrays 8 to 18 m away, wind sea 0 to 0.2 m | Mixed. Calm and light wind: interferometry roughly halves track error and speed bias. Hs 0.05 m: equal median track error, but the cusp-line method is more precise in course (0.23° vs 0.8 to 1.3° spread). Hs ≥ 0.1 m: both fail |
 
 ### Changed
 
