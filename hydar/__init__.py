@@ -1,7 +1,9 @@
 """HYDAR: Hydrodynamic Detection and Ranging.
 
-Simulate objects dropped into water, record the surface waves they make with
-pressure sensor arrays, and locate the drop by time of flight.
+Simulate objects in water (dropped spheres, boats, ships), record the surface
+waves they make with pressure sensor arrays, and locate the source: drops by
+time of flight, vessels from their wakes (hydar.locate, hydar.kelvin,
+hydar.interferometry).
 """
 
 from .solver import Grid, Solver, pml_profile
@@ -21,4 +23,4 @@ __all__ = [
     "Boat", "BoatTrack", "track_boat", "wake_arrival", "pick_wake", "KELVIN_HALF_ANGLE",
     "SpectralSolver",
 ]
-__version__ = "1.1.0"
+__version__ = "1.2.0"

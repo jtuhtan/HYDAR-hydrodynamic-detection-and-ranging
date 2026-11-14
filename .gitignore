@@ -5,3 +5,5 @@ __pycache__/
 examples/*.png
 *.npz
 .boat_scene.pkl
+ci_benchmark_partial.csv
+/*.png

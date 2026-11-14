@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * 1"   # Mondays 04:00 UTC: slow tests too
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: oldest supported
+            python: "3.9"
+            deps: "numpy==1.22.* scipy==1.8.* matplotlib==3.5.*"
+          - name: latest
+            python: "3.13"
+            deps: "numpy scipy matplotlib"
+    name: ${{ matrix.name }} (Python ${{ matrix.python }})
+    steps:
+      - uses: actions/checkout@v4
+      # uv brings its own Python builds, so the oldest supported version stays
+      # available whatever the runner image ships (setup-python no longer has 3.9)
+      - name: Install
+        run: |
+          pipx install uv
+          uv venv --python ${{ matrix.python }} .venv
+          uv pip install --python .venv/bin/python ${{ matrix.deps }} pytest
+          uv pip install --python .venv/bin/python -e . --no-deps
+          .venv/bin/python -c "import sys, numpy, scipy, matplotlib; print(sys.version.split()[0], numpy.__version__, scipy.__version__, matplotlib.__version__)"
+      - name: Fast tests
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        run: .venv/bin/python -m pytest -m "not slow"
+      - name: All tests
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: .venv/bin/python -m pytest

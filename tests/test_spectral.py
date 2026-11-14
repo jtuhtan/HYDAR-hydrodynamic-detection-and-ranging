@@ -30,3 +30,12 @@ def test_sponge_absorbs_outgoing_waves():
     assert sim.energy(interior_only=False) / e0 == pytest.approx(1.0, abs=1e-3)
     sim.run(40.0)
     assert sim.energy() / e0 < 1e-3
+
+
+def test_volume_source_is_rejected():
+    # SpectralSolver is forced by surface pressure only; a drop must not be ignored silently
+    from hydar import DropObject
+    sim = SpectralSolver(Grid(lx=6.0, ly=6.0, dx=0.05, n_pml=20), depth=1.0)
+    sim.add(DropObject(diameter=0.5, density=2500.0, x=3.0, y=3.0))
+    with pytest.raises(TypeError, match="volume source"):
+        sim.run(0.1)

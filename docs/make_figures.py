@@ -1,8 +1,19 @@
 """Regenerate the static README figures in Jeff Tuhtan's paper figure style.
 
-Run from the repository root:   python docs/make_figures.py
+Run from the repository root:   python docs/make_figures.py [N ...]
 Writes docs/img/figNN_*.png (600 dpi) plus .pdf and .svg (editable text).
 Sizes assume a 170 mm page text width (A4, 20 mm margins).
+
+The argument N selects a group of figures. File numbers and README figure
+numbers differ because the map at the top of the README has no number:
+
+    N   files written                               README
+    1   fig01_open_boundary                         Figure 1
+    2   fig02_drop_sphere                           Figure 2
+    3   fig03_hydar_timeseries, fig04_hydar_map     Figure 3, map at the top
+    4   fig05_series60_hull, fig06_boat_tracking    Figures 4 and 5
+    5   fig07_vessel_localization                   Figure 6
+    6   fig08_interferometry                        Figure 7
 """
 
 import sys

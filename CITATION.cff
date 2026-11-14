@@ -14,9 +14,9 @@ abstract: >-
 authors:
   - family-names: Tuhtan
     given-names: Jeff
-version: v1.1.0
+version: v1.2.0
 license: CC-BY-4.0
-date-released: "2026-11-09"
+date-released: "2026-11-14"
 doi: 10.5281/zenodo.23881055
 identifiers:
   - type: doi

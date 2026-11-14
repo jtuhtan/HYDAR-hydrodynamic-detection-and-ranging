@@ -56,8 +56,19 @@ def test_track_supercritical_boat():
     assert np.linalg.norm(tr.position(4.0) - bow) < 0.5
 
 
-@pytest.mark.slow
-def test_track_boat_from_kelvin_wake():
+def test_pick_wake_times_the_envelope_rise():
+    from hydar import pick_wake
+    t = np.arange(0, 20, 0.01)
+    env = np.exp(-((t - 10.0) / 2.0) ** 2)
+    p = env * np.sin(2 * np.pi * 1.0 * t)
+    t_true = 10.0 - 2.0 * np.sqrt(np.log(1 / 0.66))        # envelope reaches 66 % of its peak
+    picks = pick_wake(t, np.vstack([p, 3 * p]))
+    assert picks == pytest.approx([t_true, t_true], abs=0.2)
+    assert pick_wake(t, p).shape == (1,)                   # a single record is one sensor
+
+
+@pytest.fixture(scope="module")
+def kelvin_scene():
     grid = Grid(lx=90.0, ly=40.0, dx=0.15, n_pml=60)
     sim = SpectralSolver(grid, depth=3.0)
     arrays = [SensorArray("A", 50.0, 10.0, z=-0.4, pressure_model="solver"),
@@ -68,7 +79,24 @@ def test_track_boat_from_kelvin_wake():
     boat = Boat(speed=3.0, x=-7.0, y=20.0, heading_deg=0.0, ramp=4.0)
     sim.add(boat)
     sim.run(36.0)
+    return arrays, boat
+
+
+@pytest.mark.slow
+def test_track_boat_from_kelvin_wake(kelvin_scene):
+    arrays, boat = kelvin_scene
     tr = track_boat(arrays)
     assert tr.speed == pytest.approx(3.0, rel=0.05)
     assert tr.heading_deg == pytest.approx(0.0, abs=2.0) or tr.heading_deg == pytest.approx(360.0, abs=2.0)
+    assert np.linalg.norm(tr.position(20.0) - boat.position(20.0)) < 2.5
+
+
+@pytest.mark.slow
+def test_track_boat_by_interferometry(kelvin_scene):
+    # the boat path of case study 4: finite depth, several arrays, centroid time stamps
+    from hydar.interferometry import track_vessel
+    arrays, boat = kelvin_scene
+    tr = track_vessel(arrays, band=(0.45, 1.2), depth=3.0, window=6.0, hop=0.5, time_stamp="centroid")
+    assert tr.speed == pytest.approx(3.0, rel=0.05)
+    assert abs((tr.heading_deg + 180) % 360 - 180) < 2.0
     assert np.linalg.norm(tr.position(20.0) - boat.position(20.0)) < 2.5

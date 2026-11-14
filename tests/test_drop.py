@@ -48,3 +48,10 @@ def test_waves_radiate_outward():
     # front travels at about c = sqrt(g h) between the two gauges
     c_est = 0.5 / (arrival[1] - arrival[0])
     assert c_est == pytest.approx(np.sqrt(9.81 * 0.5), rel=0.15)
+
+
+def test_drop_outside_the_grid_is_an_error():
+    sim = Solver(Grid(lx=4.0, ly=4.0, dx=0.05, n_pml=10), depth=0.5)
+    sim.add(DropObject(diameter=0.5, density=2500.0, x=30.0, y=2.0))
+    with pytest.raises(ValueError, match="outside the grid"):
+        sim.step()

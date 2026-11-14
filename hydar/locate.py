@@ -45,8 +45,10 @@ def pick_arrivals(t: np.ndarray, p: np.ndarray, fraction: float = 0.1,
     """
     win = (t >= t_start) & (t <= (t[-1] if t_end is None else t_end))
     tw, pw = t[win], np.abs(p[:, win])
-    thr = fraction * pw.max()
     out = np.full(p.shape[0], np.nan)
+    if pw.size == 0:          # empty time window
+        return out
+    thr = fraction * pw.max()
     if thr <= 0:
         return out
     for k in range(p.shape[0]):
@@ -105,12 +107,18 @@ def locate_array(array, c: float, t0: float | None = None, fraction: float = 0.1
 
 
 def intersect_bearings(fixes) -> np.ndarray:
-    """Least-squares intersection of the bearing lines of several arrays."""
+    """Least-squares intersection of the bearing lines of several arrays.
+
+    Raises ValueError when the bearings are (nearly) parallel and so do not
+    intersect.
+    """
     A, b = np.zeros((2, 2)), np.zeros(2)
     for f in fixes:
         P = np.eye(2) - np.outer(f.direction, f.direction)  # projector normal to line
         A += P
         b += P @ f.center
+    if np.linalg.cond(A) > 1e8:
+        raise ValueError("the bearing lines are parallel and do not intersect")
     return np.linalg.solve(A, b)
 
 
@@ -127,7 +135,10 @@ def locate(arrays, c: float, t0: float | None = None, fraction: float = 0.1,
     fixes = [locate_array(a, c, t0, fraction, t_start, t_end) for a in arrays]
     out = {"fixes": fixes, "bearings": None}
     if len(fixes) >= 2:
-        out["bearings"] = intersect_bearings(fixes)
+        try:
+            out["bearings"] = intersect_bearings(fixes)
+        except ValueError:      # parallel bearings: fall back to the first array below
+            pass
 
     pos = np.vstack([a.positions for a in arrays])
     arr = np.concatenate([f.arrivals for f in fixes])
@@ -184,8 +195,9 @@ def pick_wake(t: np.ndarray, p: np.ndarray, band: tuple = (0.25, 3.0),
     win = (t >= t_start) & (t <= (t[-1] if t_end is None else t_end))
     tw = t[win]
     sos = butter(2, band, "bandpass", fs=fs, output="sos")
+    p = np.atleast_2d(p)
     out = np.full(p.shape[0], np.nan)
-    for k, x in enumerate(np.atleast_2d(p)):
+    for k, x in enumerate(p):
         env = uniform_filter1d(np.abs(hilbert(sosfiltfilt(sos, x))), max(int(fs * window), 1))[win]
         peaks = np.nonzero((env[1:-1] >= env[:-2]) & (env[1:-1] > env[2:]) &
                            (env[1:-1] > 0.5 * env.max()))[0] + 1

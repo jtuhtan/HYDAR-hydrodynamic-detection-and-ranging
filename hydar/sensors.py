@@ -56,6 +56,17 @@ def wavenumber(omega: np.ndarray, h: float, g: float = 9.81) -> np.ndarray:
     return np.where(omega == 0, 0.0, k)
 
 
+def depth_attenuation(k, z: float, h: float) -> np.ndarray:
+    """Pressure response factor cosh(k (h + z)) / cosh(k h) of linear wave theory.
+
+    k : wavenumber(s) [1/m]; z : depth of the point (negative below the
+    surface); h : water depth. Written so that it does not overflow for
+    large k h.
+    """
+    k = np.asarray(k, dtype=float)
+    return np.exp(k * z) * (1 + np.exp(-2 * k * (h + z))) / (1 + np.exp(-2 * k * h))
+
+
 def depth_response(eta: np.ndarray, fs: float, z: float, h: float,
                    g: float = 9.81, rho: float = 1000.0) -> np.ndarray:
     """Dynamic pressure [Pa] at depth z from a surface-elevation record."""
@@ -63,8 +74,7 @@ def depth_response(eta: np.ndarray, fs: float, z: float, h: float,
     n = eta.shape[-1]
     omega = 2 * np.pi * np.fft.rfftfreq(n, d=1.0 / fs)
     k = wavenumber(omega, h, g)
-    # cosh(k(h+z))/cosh(kh) written to avoid overflow for large k h
-    Kp = np.exp(k * z) * (1 + np.exp(-2 * k * (h + z))) / (1 + np.exp(-2 * k * h))
+    Kp = depth_attenuation(k, z, h)
     return rho * g * np.fft.irfft(np.fft.rfft(eta, axis=-1) * Kp, n=n, axis=-1)
 
 
@@ -83,6 +93,10 @@ class SensorArray:
     layout   : optional (n_sensors, 2) sensor offsets from the centre [m], before
                rotation. Overrides nx, ny and spacing; used for arrays whose
                geometry was optimized (hydar.interferometry.design_array).
+    noise_pa : white sensor noise [Pa, standard deviation per sample], added
+               to the dynamic pressure after the pressure model, so the water
+               above the sensor does not filter it. 0 (default) means none.
+    noise_seed : seed of that noise; the same seed gives the same record.
     """
 
     name: str
@@ -96,6 +110,8 @@ class SensorArray:
     pressure_model: str = "hydrostatic"
     rotation_deg: float = 0.0
     layout: np.ndarray | None = None
+    noise_pa: float = 0.0
+    noise_seed: int = 0
     _t: list = field(init=False, default_factory=list, repr=False)
     _eta: list = field(init=False, default_factory=list, repr=False)
 
@@ -177,10 +193,14 @@ class SensorArray:
     def dynamic_pressure(self) -> np.ndarray:
         """Wave-induced pressure at the sensor depth [Pa], (n_sensors, n_samples)."""
         if self.pressure_model in ("hydrostatic", "solver"):
-            return self._rho * self._g * self.eta
-        if self.pressure_model == "airy":
-            return depth_response(self.eta, self.fs, self.z, self._depth, self._g, self._rho)
-        raise ValueError("pressure_model must be 'hydrostatic', 'airy' or 'solver'")
+            p = self._rho * self._g * self.eta
+        elif self.pressure_model == "airy":
+            p = depth_response(self.eta, self.fs, self.z, self._depth, self._g, self._rho)
+        else:
+            raise ValueError("pressure_model must be 'hydrostatic', 'airy' or 'solver'")
+        if self.noise_pa > 0:
+            p = p + np.random.default_rng(self.noise_seed).normal(0.0, self.noise_pa, p.shape)
+        return p
 
     @property
     def pressure(self) -> np.ndarray:
