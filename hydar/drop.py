@@ -83,6 +83,8 @@ class DropObject:
         X, Y = np.meshgrid(gr.x, gr.y, indexing="ij")
         self._r2 = (X - self.x) ** 2 + (Y - self.y) ** 2
         near = self._r2 <= (self.R + 2 * gr.dx) ** 2
+        if not near.any():
+            raise ValueError(f"drop location ({self.x:g}, {self.y:g}) m lies outside the grid")
         self._win = np.nonzero(near.any(axis=1))[0], np.nonzero(near.any(axis=0))[0]
         i, j = self._win
         self._sl = (slice(i[0], i[-1] + 1), slice(j[0], j[-1] + 1))

@@ -30,8 +30,8 @@ wave from each candidate direction would produce (the "reference table"
 of correlative-interferometer direction finders in radio), and the best
 match gives n and a correlation coefficient rho in [0, 1] that says how
 plane-wave-like the field is. Each (t, f, n) observation from any array is
-one equation (1) and one equation (2). A robust fit (RANSAC, then Huber
-least squares) gives V and P0, so the track P(t) = P0 + V t.
+one equation (1) and one equation (2). A robust fit (RANSAC, then a
+Cauchy-loss least squares) gives V and P0, so the track P(t) = P0 + V t.
 
 The Kelvin angle, the cusp and the chirp are consequences of (1) and (2) in
 deep water. They are not assumed here, so the method also applies in finite
@@ -65,8 +65,7 @@ from scipy.optimize import differential_evolution, least_squares
 from scipy.signal import butter, sosfiltfilt
 
 from .sensors import wavenumber
-
-G = 9.81
+from .solver import G
 
 
 # ---------------------------------------------------------------- dispersion
@@ -190,7 +189,15 @@ def design_array(band: tuple, depth: float = np.inf, max_aperture: float = 20.0,
     pattern at most psl_max at every frequency of the band (ambiguity and
     aliasing), largest sensor separation (the diagonal) at most max_aperture
     (footprint), and every gap at least min_spacing. Solved with differential
-    evolution; the returned design is re-evaluated at full resolution.
+    evolution; the returned design is re-evaluated at full resolution, so its
+    reported sidelobe can exceed psl_max slightly.
+
+    The bearing bound only rewards a large second moment of the sensor
+    positions, so within a fixed footprint the search pushes the middle column
+    and row towards one edge until min_spacing stops them: the result is then
+    set by min_spacing, which should come from the hardware (sensor housing)
+    or from the coherence length of the noise. The bound also assumes noise
+    that is independent between sensors, which a wind sea is not.
     """
     f = np.linspace(band[0], band[1], n_freq)
     k, _, _ = dispersion(f, depth)
@@ -514,6 +521,8 @@ def fit_track(obs: Observations, tol: float = 0.04, tol_t: float = 60.0, n_iter:
                           np.r_[P0, V], loss="cauchy", f_scale=2.0).x
         P0, V = q[:2], q[2:]
     inl = inliers(P0, V)
+    if not inl.any():
+        raise RuntimeError("no observation fits the refined track")
     sub = obs.subset(inl)
     mm, rr = _ray_rows(sub, V)
     return CITrack(P0, V, int(inl.sum()), N,
@@ -523,12 +532,13 @@ def fit_track(obs: Observations, tol: float = 0.04, tol_t: float = 60.0, n_iter:
 
 def track_vessel(arrays, band: tuple, depth: float = np.inf, rho_min: float = 0.9,
                  excess: float = 3.0, tol: float = 0.04, tol_t: float | None = None,
-                 weighted: bool = False, **scan_kw) -> CITrack:
+                 weighted: bool = False, peak_rel: float = 0.0, **scan_kw) -> CITrack:
     """Full case-study-4 pipeline: observe every array, fuse, fit the track.
 
-    tol_t defaults to half the analysis window.
+    tol_t defaults to half the analysis window. rho_min, excess and peak_rel
+    are the detection tests of observe(); other keywords go to ci_scan().
     """
-    obs = Observations.concat([observe(a, band, depth, rho_min, excess, index=i, **scan_kw)
+    obs = Observations.concat([observe(a, band, depth, rho_min, excess, peak_rel, index=i, **scan_kw)
                                for i, a in enumerate(arrays)])
     if tol_t is None:
         tol_t = 0.5 * scan_kw.get("window", 120.0)
@@ -541,22 +551,14 @@ def wind_sea_head(points: np.ndarray, t: np.ndarray, depth: float, z: float, hs:
                   f_range: tuple | None = None, n: int = 80, seed: int = 0) -> np.ndarray:
     """Random short-crested wind sea as pressure head p_dyn/(rho g) [m] at depth z.
 
-    Like hydar.kelvin.wind_sea (JONSWAP-like weighting, n random components
-    with a Gaussian directional spread), but with the finite-depth dispersion
-    relation and the Airy pressure attenuation cosh(k(h+z))/cosh(kh) of each
-    component, so it can be added to SpectralSolver records (pressure_model
-    "solver"). hs is the significant wave height at the surface.
+    hydar.kelvin.wind_sea with the finite-depth dispersion relation and the
+    Airy pressure attenuation cosh(k(h+z))/cosh(kh) of each component, so it
+    can be added to SpectralSolver records (pressure_model "solver"). hs is
+    the significant wave height at the surface; f_range defaults to 0.6 to
+    1.8 times f_peak.
     """
-    rng = np.random.default_rng(seed)
-    lo, hi = f_range if f_range is not None else (0.6 * f_peak, 1.8 * f_peak)
-    f = rng.uniform(lo, hi, n)
-    S = f ** -5 * np.exp(-1.25 * (f_peak / f) ** 4)
-    a = np.sqrt(S / S.sum()) * hs / 4 * np.sqrt(2)
-    d = np.radians(mean_dir_deg + spread_deg * rng.standard_normal(n))
-    k = dispersion(f, depth)[0]
-    Kp = np.exp(k * z) * (1 + np.exp(-2 * k * (depth + z))) / (1 + np.exp(-2 * k * depth))
-    ph0 = rng.uniform(0, 2 * np.pi, n)
-    pts = np.atleast_2d(points)
-    proj = pts[:, 0, None] * np.cos(d) + pts[:, 1, None] * np.sin(d)
-    arg = (k * proj)[:, :, None] - (2 * np.pi * f)[None, :, None] * t[None, None, :] + ph0[None, :, None]
-    return np.einsum("j,ijk->ik", a * Kp, np.cos(arg))
+    from .kelvin import wind_sea
+    if f_range is None:
+        f_range = (0.6 * f_peak, 1.8 * f_peak)
+    return wind_sea(points, t, hs=hs, f_peak=f_peak, mean_dir_deg=mean_dir_deg,
+                    spread_deg=spread_deg, n=n, seed=seed, f_range=f_range, depth=depth, z=z)

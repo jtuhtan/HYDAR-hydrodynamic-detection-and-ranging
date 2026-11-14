@@ -52,6 +52,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import fft as sfft
 
+from .sensors import depth_attenuation
 from .solver import G, Grid
 
 _WORKERS = -1
@@ -153,8 +154,10 @@ class SpectralSolver:
     def step(self) -> None:
         """Advance one time step dt."""
         for obj in self.objects:
-            if hasattr(obj, "source"):
-                obj.source(self)          # lets sensors attach; no volume sources here
+            if hasattr(obj, "source") and obj.source(self) is not None:   # lets sensors attach
+                raise TypeError(
+                    f"{type(obj).__name__} is a volume source, which SpectralSolver does not "
+                    "support (it is forced by surface pressure only); use hydar.Solver for it")
         dt = self.dt
         Pm = self._pressure(self.t + 0.5 * dt)
         Pm_hat = sfft.rfft2(Pm, workers=_WORKERS) * self._filter
@@ -181,9 +184,7 @@ class SpectralSolver:
             return self._zcache[z]
         if self._a_hat is None:
             self._a_hat = sfft.rfft2(self._eta + self._P, workers=_WORKERS)
-        kh = self.k * self.depth
-        # cosh k(h+z)/cosh kh, overflow-safe
-        Kz = np.exp(self.k * z) * (1 + np.exp(-2 * (kh + self.k * z))) / (1 + np.exp(-2 * kh))
+        Kz = depth_attenuation(self.k, z, self.depth)
         out = sfft.irfft2(self._a_hat * Kz, s=(self.grid.nx, self.grid.ny), workers=_WORKERS)
         self._zcache[z] = out
         return out

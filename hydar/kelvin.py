@@ -45,7 +45,9 @@ from scipy.interpolate import CubicSpline
 from scipy.optimize import least_squares
 from scipy.signal import butter, sosfiltfilt, spectrogram
 
-G = 9.81
+from .sensors import depth_attenuation, wavenumber
+from .solver import G
+
 THETA_CUSP = np.arctan(1 / np.sqrt(2))   # 35.26 deg
 
 
@@ -116,15 +118,31 @@ class KelvinShip:
 
 def wind_sea(points: np.ndarray, t: np.ndarray, hs: float = 0.15, f_peak: float = 0.4,
              mean_dir_deg: float = 112.5, spread_deg: float = 30.0, n: int = 80,
-             seed: int = 0) -> np.ndarray:
-    """Random short-crested deep-water wind sea (sum of n wave components)."""
+             seed: int = 0, f_range: tuple = (0.25, 0.7), depth: float = np.inf,
+             z: float | None = None) -> np.ndarray:
+    """Random short-crested wind sea (sum of n wave components).
+
+    hs is the significant wave height at the surface. The n components have
+    random frequencies in f_range [Hz] (the default suits f_peak = 0.4 Hz;
+    give a range around the peak for other values), a JONSWAP-like weighting
+    around f_peak and a Gaussian directional spread.
+
+    depth : water depth for the dispersion relation (np.inf: deep water).
+    z     : if given, return the pressure head p_dyn/(rho g) [m] at that depth
+            (each component attenuated by cosh(k(h+z))/cosh(kh)) instead of
+            the surface elevation; needs a finite depth.
+    """
     rng = np.random.default_rng(seed)
-    f = rng.uniform(0.25, 0.7, n)
+    f = rng.uniform(f_range[0], f_range[1], n)
     # JONSWAP-like weighting around f_peak
     S = f ** -5 * np.exp(-1.25 * (f_peak / f) ** 4)
     a = np.sqrt(S / S.sum()) * hs / 4 * np.sqrt(2)
     d = np.radians(mean_dir_deg + spread_deg * rng.standard_normal(n))
-    k = (2 * np.pi * f) ** 2 / G
+    k = (2 * np.pi * f) ** 2 / G if np.isinf(depth) else wavenumber(2 * np.pi * f, depth, G)
+    if z is not None:
+        if np.isinf(depth):
+            raise ValueError("pressure at depth z needs a finite water depth")
+        a = a * depth_attenuation(k, z, depth)
     ph0 = rng.uniform(0, 2 * np.pi, n)
     pts = np.atleast_2d(points)
     proj = pts[:, 0, None] * np.cos(d) + pts[:, 1, None] * np.sin(d)      # (n_pts, n)
@@ -137,19 +155,18 @@ def record_passage(arrays, ship: KelvinShip, t_end: float, depth: float, fs_mode
     """Synthesize the wake (+ wind sea + sensor noise) and load it into arrays.
 
     The wave field is computed at fs_model and spline-interpolated to each
-    array's sampling rate; noise_pa is white sensor noise [Pa] added afterwards
-    as an equivalent surface elevation.
+    array's sampling rate. noise_pa is white sensor noise [Pa]; it is set on
+    each array (SensorArray.noise_pa, seeded from `seed`) and so is added to
+    the pressure after the depth response, as for a real sensor.
     """
-    rng = np.random.default_rng(seed)
     tm = np.arange(0.0, t_end, 1.0 / fs_model)
-    for a in arrays:
+    for i, a in enumerate(arrays):
         eta_m = ship.wake(a.positions, tm)
         if wind is not None:
             eta_m += wind_sea(a.positions, tm, **wind)
         tf = np.arange(0.0, tm[-1], 1.0 / a.fs)
-        eta = CubicSpline(tm, eta_m, axis=1)(tf)
-        eta += rng.normal(0, noise_pa / (1000 * G), eta.shape)
-        a.load(tf, eta, depth=depth)
+        a.load(tf, CubicSpline(tm, eta_m, axis=1)(tf), depth=depth)
+        a.noise_pa, a.noise_seed = noise_pa, seed + i
 
 
 # ----------------------------------------------------------------- theory
@@ -174,15 +191,19 @@ def cusp_time(U: float, d: float, t_abeam: float) -> float:
 
 
 # ----------------------------------------------------------------- analysis
-def stacked_spectrogram(array, sensors=(0, 2, 4, 6, 8), fs_out: float = 4.0,
+def stacked_spectrogram(array, sensors=None, fs_out: float = 4.0,
                         window_s: float = 64.0, overlap: float = 0.9, band=(0.05, 0.6)):
     """Spectrogram of the dynamic pressure, averaged over several sensors.
 
     Following Rätsep et al. (2020) the spectrograms of closely spaced sensors
-    are combined; by default the four corners and the centre of a 3 x 3 array.
+    are combined. sensors lists the sensor indices to use; by default the
+    four corners and the centre of a 9-sensor (3 x 3) array, and every sensor
+    of any other array.
     Returns t [s], f [Hz], S (power, f x t), normalised to its maximum.
     """
     p = array.dynamic_pressure
+    if sensors is None:
+        sensors = (0, 2, 4, 6, 8) if array.n_sensors == 9 else range(array.n_sensors)
     step = int(round(array.fs / fs_out))
     sos = butter(4, 0.4 * fs_out, fs=array.fs, output="sos")
     S = None
@@ -209,13 +230,16 @@ def detect_wake(t, f, S, band=(0.08, 0.3), k_noise: float = 6.0):
 
 
 def ridge_points(t, f, S, t_window, band=(0.08, 0.27), rel: float = 0.03, floor: float = 30.0,
-                 max_peaks: int = 2):
+                 max_peaks: int = 2, refine: bool = True):
     """Spectral peaks (time, frequency) of the wake inside t_window.
 
     Up to max_peaks peaks per time column, each at least `rel` of that column's
     strongest peak and `floor` times the band's median background. The upper
     band edge sits below the wind sea, which masks the upper divergent branch
-    (as noted by Rätsep et al.).
+    (as noted by Rätsep et al.). With `refine`, each peak frequency is
+    interpolated between spectrogram bins (parabola through the log power);
+    bin-centre frequencies bias the chirp fit's distance and time abeam.
+    Returns an (n, 2) array, empty if no peak qualifies.
     """
     from scipy.signal import find_peaks
     pts = []
@@ -230,8 +254,16 @@ def ridge_points(t, f, S, t_window, band=(0.08, 0.27), rel: float = 0.03, floor:
         if pk.size == 0:
             continue
         pk = pk[np.argsort(prop["peak_heights"])[::-1][:max_peaks]]
-        pts += [(tj, fs_[i]) for i in pk]
-    return np.array(pts)
+        for i in pk:
+            fi = fs_[i]
+            if refine and 0 < i < len(col) - 1 and min(col[i - 1], col[i + 1]) > 0:
+                # parabola through the log power of the peak and its neighbours
+                y0, y1, y2 = np.log(col[i - 1:i + 2])
+                den = y0 - 2 * y1 + y2
+                if den < 0:
+                    fi += np.clip(0.5 * (y0 - y2) / den, -0.5, 0.5) * (fs_[1] - fs_[0])
+            pts.append((tj, fi))
+    return np.array(pts).reshape(-1, 2)
 
 
 @dataclass
@@ -243,8 +275,17 @@ class ChirpFit:
     rms_hz: float
 
 
-def fit_chirp(points: np.ndarray, t_detect: float) -> ChirpFit:
-    """Fit U, d and t_abeam so the Kelvin branches match the ridge points."""
+def fit_chirp(points: np.ndarray, t_detect: float,
+              d_guesses: tuple = (500.0, 1000.0, 2000.0, 3000.0, 4500.0)) -> ChirpFit:
+    """Fit U, d and t_abeam so the Kelvin branches match the ridge points.
+
+    d_guesses : starting distances from the track [m] for the least-squares
+        fit (the fit is bounded to 50 m to 20 km); the defaults suit a ship
+        a few kilometres away.
+    """
+    points = np.asarray(points, dtype=float).reshape(-1, 2)
+    if len(points) < 3:
+        raise RuntimeError("too few ridge points for the chirp fit")
     tp, fp = points[:, 0], points[:, 1]
 
     def resid(q):
@@ -260,7 +301,7 @@ def fit_chirp(points: np.ndarray, t_detect: float) -> ChirpFit:
     best = None
     U0 = G / (2 * np.pi * np.percentile(fp, 5))            # transverse asymptote
     for U in (0.9 * U0, U0, 1.1 * U0):
-        for d in (500.0, 1000.0, 2000.0, 3000.0, 4500.0):
+        for d in d_guesses:
             ta = t_detect - 2 * np.sqrt(2) * d / U
             r = least_squares(resid, [U, d, ta], x_scale=[1.0, 500.0, 100.0],
                               bounds=([1.0, 50.0, -1e5], [40.0, 2e4, 1e5]))
@@ -271,12 +312,15 @@ def fit_chirp(points: np.ndarray, t_detect: float) -> ChirpFit:
                     float(np.sqrt(np.mean(best.fun ** 2))))
 
 
-def wave_direction(array, t0: float, t1: float, band=(0.1, 0.25)):
+def wave_direction(array, t0: float, t1: float, band=(0.1, 0.25), min_speed: float = 2.0):
     """Propagation direction of the waves crossing the array in [t0, t1].
 
-    Band-passes every sensor, cross-correlates all 36 sensor pairs to get
+    Band-passes every sensor, cross-correlates all sensor pairs to get
     their time delays (sub-sample peak interpolation), and fits a plane wave.
+    min_speed [m/s] is the slowest phase speed searched for: the lag window
+    is the largest sensor separation divided by it.
     Returns (unit propagation vector, apparent phase speed [m/s]).
+    Raises RuntimeError if [t0, t1] holds too few samples of the record.
     """
     p = array.dynamic_pressure
     t = array.time
@@ -285,13 +329,19 @@ def wave_direction(array, t0: float, t1: float, band=(0.1, 0.25)):
     x = np.array([sosfiltfilt(sos, pk)[w] for pk in p])
     n = len(x)
     span = max(np.linalg.norm(a - b) for a in array.positions for b in array.positions)
-    max_lag = int(array.fs * span / 2.0)   # > largest inter-sensor delay at 2 m/s
+    max_lag = int(array.fs * span / min_speed)   # > largest inter-sensor delay at min_speed
+    if x.shape[1] <= 2 * max_lag:
+        raise RuntimeError(f"window {t0:.0f} to {t1:.0f} s holds too few samples of the record")
+    overlap = x.shape[1] - np.abs(np.arange(-max_lag, max_lag + 1))
     rows, lags = [], []
     for i in range(n):
         for j in range(i + 1, n):
             cc = np.correlate(x[j], x[i], mode="full")
             mid = len(x[i]) - 1
-            seg = cc[mid - max_lag: mid + max_lag + 1]
+            # unbiased estimate: divide by the number of overlapping samples. The raw
+            # correlation tapers towards larger lags, which pulls the flat peak of a
+            # narrow-band signal towards zero lag and so overstates the phase speed.
+            seg = cc[mid - max_lag: mid + max_lag + 1] / overlap
             m = int(np.argmax(seg))
             if 0 < m < len(seg) - 1:   # parabolic sub-sample refinement
                 y0, y1, y2 = seg[m - 1], seg[m], seg[m + 1]
@@ -326,23 +376,45 @@ class VesselFix:
                 f"cusp at t = {self.t_cusp:.0f} s (phase-speed check {self.speed_from_phase:.2f} m/s)")
 
 
-def locate_vessel(array, spectro_kw: dict | None = None) -> VesselFix:
-    """Full case-study-3 pipeline for one 3 x 3 array."""
+def locate_vessel(array, spectro_kw: dict | None = None,
+                  cusp_window: tuple = (-30.0, 0.0)) -> VesselFix:
+    """Full case-study-3 pipeline for one 3 x 3 array.
+
+    cusp_window : time window [s], relative to the fitted cusp time, in which
+        the direction of the cusp waves is measured. The default ends at the
+        cusp: ahead of the cusp line only the cusp wave itself is present (the
+        decaying side of its Airy profile), travelling at theta_c to the
+        course. Behind the line the transverse and divergent branches coexist
+        and their mean direction drifts away from theta_c, which biases the
+        course (+2 deg for a window of -10 to +30 s in the README scenario).
+
+    Raises RuntimeError when no wake is detected, no spectrogram ridge is
+    found, or the chirp fit puts an analysis window outside the record.
+    """
     t, f, S = stacked_spectrogram(array, **(spectro_kw or {}))
     det = detect_wake(t, f, S)
     if det is None:
         raise RuntimeError("no wake detected")
     t_on, t_off = det[0], det[1]
     pts = ridge_points(t, f, S, (t_on, t_off))
+    if len(pts) < 5:
+        raise RuntimeError("too few spectrogram ridge points for the chirp fit")
     chirp = fit_chirp(pts, t_on)
     U, d = chirp.speed, chirp.distance
 
-    # direction of the cusp waves (strongest, theta = theta_c) and of the late
+    # direction of the cusp waves (theta = theta_c) and of the late
     # transverse waves (theta -> 0, i.e. along the course)
-    n_c, c_app = wave_direction(array, chirp.t_cusp - 10, chirp.t_cusp + 30)
     f_t = G / (2 * np.pi * U)
     t_late = chirp.t_abeam + 6 * d / U
-    n_t, _ = wave_direction(array, t_late - 40, t_late + 40, band=(0.8 * f_t, 1.05 * f_t))
+    t_rec = array.time
+    windows = ((chirp.t_cusp + cusp_window[0], chirp.t_cusp + cusp_window[1]),
+               (t_late - 40, t_late + 40))
+    for w0, w1 in windows:      # at least half of each window must lie inside the record
+        if min(w1, t_rec[-1]) - max(w0, t_rec[0]) < 0.5 * (w1 - w0):
+            raise RuntimeError(f"chirp fit puts the analysis window {w0:.0f} to {w1:.0f} s outside "
+                               f"the record ({t_rec[0]:.0f} to {t_rec[-1]:.0f} s)")
+    n_c, c_app = wave_direction(array, *windows[0])
+    n_t, _ = wave_direction(array, *windows[1], band=(0.8 * f_t, 1.05 * f_t))
     rot = lambda v, a: np.array([v[0] * np.cos(a) - v[1] * np.sin(a), v[0] * np.sin(a) + v[1] * np.cos(a)])
     cands = [rot(n_c, -THETA_CUSP), rot(n_c, THETA_CUSP)]
     e = max(cands, key=lambda c: c @ n_t)
