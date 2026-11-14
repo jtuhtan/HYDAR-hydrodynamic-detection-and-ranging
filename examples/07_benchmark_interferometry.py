@@ -14,10 +14,16 @@ to wind noise, for both earlier vessel case studies:
 
 For each wind-sea height Hs, N_SEEDS realizations of the wind sea (random
 phases, frequencies and directions) and of the sensor noise are added to the
-same wake. Wind is added linearly to the recorded wake (linear theory).
+same wake. Wind is added linearly to the recorded wake (linear theory). Every
+geometry and method sees the same seeds, so runs can be compared in pairs.
 
-Run:  python examples/07_benchmark_interferometry.py   (about 30 min on 4 cores)
-Writes docs/data/ci_benchmark.csv and prints the summary tables.
+Run:  python examples/07_benchmark_interferometry.py            (100 seeds, about 2 h on 4 cores)
+      N_SEEDS=5 python examples/07_benchmark_interferometry.py ferry      (a quick partial run)
+
+The full run writes docs/data/ci_benchmark.csv. A partial run (one case only,
+or another N_SEEDS) writes ci_benchmark_partial.csv in the current directory
+instead, so it cannot replace the full data set. Both print the summary and
+the paired comparisons.
 """
 
 import csv
@@ -37,8 +43,11 @@ from hydar.kelvin import KelvinShip, locate_vessel, wind_sea
 
 warnings.filterwarnings("ignore")
 G = 9.81
-N_SEEDS = int(os.environ.get("N_SEEDS", 20))
+N_SEEDS_FULL = 100
+N_SEEDS = int(os.environ.get("N_SEEDS", N_SEEDS_FULL))
 OUT = Path(__file__).resolve().parents[1] / "docs" / "data" / "ci_benchmark.csv"
+OUT_PARTIAL = Path("ci_benchmark_partial.csv")
+NOISE_PA = 2.0                # white sensor noise [Pa]
 
 # ------------------------------------------------------------------ ferry (case 3)
 F_DEPTH, F_BAND, F_TEND, F_FSM = 3.0, (0.07, 0.3), 1800.0, 4.0
@@ -57,7 +66,26 @@ B_SPEC = [("A", 50.0, 14.0, -0.3), ("B", 75.0, 16.0, -0.5), ("C", 55.0, 36.0, -0
 B_TT = np.linspace(15, 44, 30)
 BOAT = dict(speed=3.0, x=-8.0, y=22.0, heading_deg=4.0)
 
-STATE = {}
+STATE = {}                    # wakes and solver records, filled in the parent process
+
+
+def _init_worker(state):
+    """Give each worker process the shared records (works with fork, spawn and forkserver)."""
+    STATE.update(state)
+
+
+def _attempt(fn):
+    """Run one method. Returns (ok, reason, result).
+
+    A RuntimeError is the method saying it found no fix. Any other exception is
+    a defect; it is recorded as such instead of being counted silently.
+    """
+    try:
+        return 1, "", fn()
+    except RuntimeError as exc:
+        return 0, f"no fix: {exc}", (np.nan, np.nan, np.nan)
+    except Exception as exc:  # noqa: BLE001  (keep the run alive, but name the error)
+        return 0, f"error: {type(exc).__name__}: {exc}", (np.nan, np.nan, np.nan)
 
 
 def ferry_array(layout):
@@ -84,48 +112,49 @@ def run_ferry(job):
     if hs > 0:
         eta_m += wind_sea(arr.positions, F_TM, hs=hs, f_peak=0.4, mean_dir_deg=112.5, seed=seed)
     tf = np.arange(0.0, F_TM[-1], 1 / arr.fs)
-    eta = CubicSpline(F_TM, eta_m, axis=1)(tf)
-    eta += np.random.default_rng(seed + 1000).normal(0, 2.0 / (1000 * G), eta.shape)
-    arr.load(tf, eta, depth=F_DEPTH)
+    arr.load(tf, CubicSpline(F_TM, eta_m, axis=1)(tf), depth=F_DEPTH)
+    arr.noise_pa, arr.noise_seed = NOISE_PA, seed + 1000
+
+    def kelvin():
+        f = locate_vessel(arr)
+        return score(f.speed, f.course_deg, f.position, 11.0, course, SHIP.position, F_TT)
+
+    def interferometry():
+        f = track_vessel([arr], F_BAND, depth=np.inf, window=120.0, hop=20.0)
+        return score(f.speed, f.heading_deg, f.position, 11.0, course, SHIP.position, F_TT)
+
     rows = []
-    for method in ("kelvin", "interferometry"):
-        try:
-            if method == "kelvin":
-                f = locate_vessel(arr)
-                r = score(f.speed, f.course_deg, f.position, 11.0, course, SHIP.position, F_TT)
-            else:
-                f = track_vessel([arr], F_BAND, depth=np.inf, window=120.0, hop=20.0)
-                r = score(f.speed, f.heading_deg, f.position, 11.0, course, SHIP.position, F_TT)
-            rows.append(("ferry", geo, method, hs, seed, 1, *r))
-        except Exception:
-            rows.append(("ferry", geo, method, hs, seed, 0, np.nan, np.nan, np.nan))
+    for method, fn in (("kelvin", kelvin), ("interferometry", interferometry)):
+        ok, reason, r = _attempt(fn)
+        rows.append(("ferry", geo, method, hs, seed, ok, *r, reason))
     return rows
 
 
 def run_boat(job):
     geo, hs, seed = job
     layout, recs, t = STATE["boat"][geo]
-    rng = np.random.default_rng(seed + 1000)
     arrays = []
-    for (name, x, y, z), eta0 in zip(B_SPEC, recs):
-        a = SensorArray(name, x, y, z=z, layout=layout)
+    for i, ((name, x, y, z), eta0) in enumerate(zip(B_SPEC, recs)):
+        a = SensorArray(name, x, y, z=z, layout=layout, noise_pa=NOISE_PA, noise_seed=1000 * (seed + 1) + i)
         eta = eta0.copy()
         if hs > 0:
             eta += wind_sea_head(a.positions, t, B_DEPTH, z, hs, B_FPEAK, mean_dir_deg=112.5, seed=seed)
-        eta += rng.normal(0, 2.0 / (1000 * G), eta.shape)
         a.load(t, eta, depth=B_DEPTH)
         arrays.append(a)
+
+    def kelvin():
+        return track_boat(arrays)
+
+    def interferometry():
+        return track_vessel(arrays, B_BAND, depth=B_DEPTH, window=6.0, hop=0.5, time_stamp="centroid")
+
     rows = []
-    for method in ("kelvin", "interferometry"):
-        try:
-            if method == "kelvin":
-                f = track_boat(arrays)
-            else:
-                f = track_vessel(arrays, B_BAND, depth=B_DEPTH, window=6.0, hop=0.5, time_stamp="centroid")
-            r = score(f.speed, f.heading_deg, f.position, BOAT["speed"], BOAT["heading_deg"], boat_true, B_TT)
-            rows.append(("boat", geo, method, hs, seed, 1, *r))
-        except Exception:
-            rows.append(("boat", geo, method, hs, seed, 0, np.nan, np.nan, np.nan))
+    for method, fn in (("kelvin", kelvin), ("interferometry", interferometry)):
+        def scored(fn=fn):
+            f = fn()
+            return score(f.speed, f.heading_deg, f.position, BOAT["speed"], BOAT["heading_deg"], boat_true, B_TT)
+        ok, reason, r = _attempt(scored)
+        rows.append(("boat", geo, method, hs, seed, ok, *r, reason))
     return rows
 
 
@@ -155,7 +184,7 @@ def summarize(rows):
     keys = sorted({(r[0], r[1], r[2], r[3]) for r in rows}, key=lambda k: (k[0], k[1], k[3], k[2]))
     for case, geo, method, hs in keys:
         R = [r for r in rows if r[:4] == (case, geo, method, hs)]
-        ok = np.array([r[6:] for r in R if r[5]], float)
+        ok = np.array([r[6:9] for r in R if r[5]], float)
         unit = "m"
         if len(ok) == 0:
             print(f"| {case} | {geo} | {method} | {hs} | 0/{len(R)} | | | | | | |")
@@ -166,8 +195,54 @@ def summarize(rows):
               f"{fmt.format(np.median(ok[:, 2]))} {unit} | {fmt.format(np.percentile(ok[:, 2], 90))} {unit} |")
 
 
+def paired(rows, case, method, geo_a, geo_b):
+    """Seed-by-seed comparison of the track error of two geometries (same method)."""
+    from scipy.stats import binomtest, wilcoxon
+    err = {(r[1], r[3], r[4]): r[8] for r in rows if r[0] == case and r[2] == method and r[5]}
+    print(f"\n{case}, {method}: '{geo_a}' against '{geo_b}' (paired by seed, track RMS)")
+    print("| Hs (m) | pairs | first is better | sign test p | median difference (95 % CI) | Wilcoxon p |")
+    print("|---|---|---|---|---|---|")
+    rng = np.random.default_rng(0)
+    pooled = []
+    for hs in sorted({k[1] for k in err}):
+        seeds = sorted({k[2] for k in err if k[:2] == (geo_a, hs)} & {k[2] for k in err if k[:2] == (geo_b, hs)})
+        if len(seeds) < 6:
+            print(f"| {hs} | {len(seeds)} | | | | |")
+            continue
+        d = np.array([err[(geo_a, hs, s)] - err[(geo_b, hs, s)] for s in seeds])
+        wins = int((d < 0).sum())
+        boot = np.median(rng.choice(d, (2000, len(d))), axis=1)
+        lo, hi = np.percentile(boot, [2.5, 97.5])
+        unit = "{:+.0f} ({:+.0f} to {:+.0f}) m" if case == "ferry" else "{:+.2f} ({:+.2f} to {:+.2f}) m"
+        print(f"| {hs} | {len(d)} | {wins} | {binomtest(wins, len(d)).pvalue:.3f} | "
+              f"{unit.format(np.median(d), lo, hi)} | {wilcoxon(d).pvalue if d.any() else 1.0:.3f} |")
+        if hs > 0:
+            pooled.append(d)
+    if pooled:
+        d = np.concatenate(pooled)
+        wins = int((d < 0).sum())
+        print(f"| all Hs > 0 | {len(d)} | {wins} | {binomtest(wins, len(d)).pvalue:.3f} | | {wilcoxon(d).pvalue:.3f} |")
+
+
+def failures(rows):
+    """Count the recorded reasons for runs without a fix; defects are listed separately."""
+    from collections import Counter
+    c = Counter()
+    for r in rows:
+        if not r[5]:
+            kind = "no fix" if r[9].startswith("no fix") else r[9]
+            c[(r[0], r[2], kind)] += 1
+    print("\nRuns without a fix:" + ("  none" if not c else ""))
+    for (case, method, kind), n in sorted(c.items()):
+        print(f"  {case:5s} {method:14s} {n:4d}  {kind}")
+    if any(k[2] != "no fix" for k in c):
+        print("  WARNING: rows marked 'error' are defects, not detection failures.")
+
+
 if __name__ == "__main__":
     which = sys.argv[1:] or ["ferry", "boat"]
+    full = set(which) == {"ferry", "boat"} and N_SEEDS == N_SEEDS_FULL
+    out = OUT if full else OUT_PARTIAL
     print("designing arrays ...")
     STATE["ferry"], STATE["boat"] = {}, {}
     if "ferry" in which:
@@ -189,14 +264,20 @@ if __name__ == "__main__":
     if "boat" in which:
         jobs += [(run_boat, (g, hs, s)) for g in STATE["boat"] for hs in B_HS for s in range(N_SEEDS)]
     print(f"{len(jobs)} Monte Carlo runs ...")
-    with Pool() as pool:
+    with Pool(initializer=_init_worker, initargs=(STATE,)) as pool:
         res = pool.map(_dispatch, jobs, chunksize=1)
     rows = [r for rr in res for r in rr]
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUT, "w", newline="") as fh:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["case", "geometry", "method", "hs_m", "seed", "ok", "speed_err_mps",
-                    "course_err_deg", "track_rms_m"])
+                    "course_err_deg", "track_rms_m", "reason"])
         w.writerows(rows)
-    print(f"wrote {OUT}")
+    print(f"wrote {out}" + ("" if full else "  (partial run; docs/data/ci_benchmark.csv is unchanged)"))
     summarize(rows)
+    failures(rows)
+    if "ferry" in which:
+        paired(rows, "ferry", "interferometry", "optimal, 20 m footprint", "Ratsep 2.5 m grid")
+        paired(rows, "ferry", "interferometry", "optimal, same footprint", "Ratsep 2.5 m grid")
+    if "boat" in which:
+        paired(rows, "boat", "interferometry", "optimal, same footprint", "1 m grid")
