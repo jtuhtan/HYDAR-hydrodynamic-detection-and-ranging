@@ -25,7 +25,8 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 - **Repository review 2026-11-14: remaining items** (`repository_review/2026-11-14-comprehensive-repository-review.md`).
   Open: HYDAR-006 (ferry depth, above), 010 (Zenodo DOI, above), 020 (chirp fit, above); partially resolved:
   016 (`KelvinShip.wake` hard-codes rho = 1000), 017 (32 MB of figures in git history; LFS or release assets
-  is Jeff's decision). PR #4 holds the review and the remediation.
+  is Jeff's decision). Review and remediation were merged with PR #4 (cf4f657, merge commit, so the
+  commit hashes cited in the review stay valid).
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
 
