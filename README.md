@@ -29,7 +29,7 @@ cd HYDAR-hydrodynamic-detection-and-ranging
 pip install -e ".[test]"
 
 python examples/03_hydar_localization.py   # full pipeline, about 40 s
-pytest -m "not slow"                       # 35 fast tests, about 2 minutes (all 40 with plain pytest: about 5)
+pytest -m "not slow"                       # 36 fast tests, about 2 minutes (all 41 with plain pytest: about 5)
 ```
 
 ```python
@@ -215,50 +215,50 @@ track = track_vessel([array], band=(0.07, 0.3), window=120.0, hop=20.0)
 print(track.speed, track.heading_deg, track.position(600.0))
 ```
 
-**Benchmark.** `examples/07_benchmark_interferometry.py` runs both earlier vessel scenarios with 20 random wind seas (and sensor noise) at each wind-sea height H_s, on every geometry, and analyses each record with both methods. For the boat, the wind sea is added to the dispersive-solver pressures with the finite-depth depth attenuation (`wind_sea_head`, peak at 0.8 Hz, inside the wake band). Accuracy is the mean error (bias), precision is its standard deviation, and the track error is the RMS distance from the true track over the record. All rows are in [`docs/data/ci_benchmark.csv`](docs/data/ci_benchmark.csv).
+**Benchmark.** `examples/07_benchmark_interferometry.py` runs both earlier vessel scenarios with 100 random wind seas at each wind-sea height H_s, on every geometry, and analyses each record with both methods (2700 records, 5400 analyses). Every sensor carries 2 Pa of white noise, added after the pressure model. For the boat, the wind sea is added to the dispersive-solver pressures with the finite-depth depth attenuation (`wind_sea_head`, peak at 0.8 Hz, inside the wake band). Accuracy is the mean error (bias), precision is its standard deviation, and the track error is the RMS distance from the true track over the record. Both methods see the same record for a given seed, so geometries are also compared seed by seed (sign test and Wilcoxon signed-rank test on the track error). All rows, with the reason for every run that gave no fix, are in [`docs/data/ci_benchmark.csv`](docs/data/ci_benchmark.csv).
 
 *Ferry (case study 3), one array 2.5 km from the track, wind sea at 0.4 Hz:*
 
 | H_s | Method, geometry | Fixes | Speed bias ± SD (m/s) | Course bias ± SD (°) | Track RMS, median (90 %) |
 |---|---|---|---|---|---|
-| 0 | Kelvin, Rätsep grid | 20/20 | −0.005 ± 0.000 | +2.03 ± 0.00 | 538 m (539 m) |
-| 0 | Interferometry, Rätsep grid | 20/20 | +0.004 ± 0.000 | −0.08 ± 0.00 | 65 m (82 m) |
-| 0 | Interferometry, optimal 20 m | 20/20 | +0.005 ± 0.000 | −0.08 ± 0.00 | 59 m (63 m) |
-| 0.3 m | Kelvin, Rätsep grid | 19/20 | −0.009 ± 0.006 | +2.00 ± 0.05 | 537 m (566 m) |
-| 0.3 m | Interferometry, Rätsep grid | 20/20 | +0.002 ± 0.003 | −0.04 ± 0.07 | 132 m (268 m) |
-| 0.3 m | Interferometry, optimal 20 m | 20/20 | +0.003 ± 0.002 | −0.05 ± 0.04 | 103 m (159 m) |
-| 0.6 m | Kelvin, Rätsep grid | 20/20 | −0.020 ± 0.014 | +1.98 ± 0.29 | 615 m (829 m) |
-| 0.6 m | Interferometry, Rätsep grid | 20/20 | −0.001 ± 0.004 | +0.03 ± 0.09 | 216 m (384 m) |
-| 0.6 m | Interferometry, optimal 20 m | 20/20 | −0.000 ± 0.003 | +0.01 ± 0.06 | 183 m (293 m) |
+| 0 | Kelvin, Rätsep grid | 100/100 | −0.007 ± 0.000 | +0.68 ± 0.00 | 402 m (402 m) |
+| 0 | Interferometry, Rätsep grid | 100/100 | +0.004 ± 0.000 | −0.08 ± 0.00 | 68 m (82 m) |
+| 0 | Interferometry, optimal 20 m | 100/100 | +0.005 ± 0.000 | −0.08 ± 0.00 | 59 m (63 m) |
+| 0.3 m | Kelvin, Rätsep grid | 92/100 | −0.011 ± 0.002 | +0.63 ± 0.12 | 397 m (412 m) |
+| 0.3 m | Interferometry, Rätsep grid | 100/100 | +0.001 ± 0.004 | −0.02 ± 0.09 | 131 m (334 m) |
+| 0.3 m | Interferometry, optimal 20 m | 100/100 | +0.002 ± 0.003 | −0.03 ± 0.05 | 110 m (236 m) |
+| 0.6 m | Kelvin, Rätsep grid | 97/100 | −0.019 ± 0.005 | +0.52 ± 0.30 | 457 m (794 m) |
+| 0.6 m | Interferometry, Rätsep grid | 100/100 | −0.002 ± 0.004 | +0.04 ± 0.09 | 235 m (379 m) |
+| 0.6 m | Interferometry, optimal 20 m | 100/100 | −0.000 ± 0.003 | +0.02 ± 0.07 | 205 m (308 m) |
 
 *Boat (case study 2), four arrays 8 to 18 m from the track, wind sea at 0.8 Hz:*
 
 | H_s | Method, geometry | Fixes | Speed bias ± SD (m/s) | Course bias ± SD (°) | Track RMS, median (90 %) |
 |---|---|---|---|---|---|
-| 0 | Kelvin, 1 m grid | 20/20 | +0.064 ± 0.001 | −0.27 ± 0.00 | 1.40 m (1.40 m) |
-| 0 | Interferometry, 1 m grid | 20/20 | +0.033 ± 0.000 | +0.41 ± 0.01 | 0.72 m (0.73 m) |
-| 0 | Interferometry, optimal | 20/20 | +0.025 ± 0.000 | +0.52 ± 0.01 | 0.99 m (0.99 m) |
-| 0.025 m | Kelvin, 1 m grid | 20/20 | +0.062 ± 0.016 | −0.27 ± 0.07 | 1.41 m (1.50 m) |
-| 0.025 m | Interferometry, 1 m grid | 20/20 | +0.026 ± 0.013 | +0.48 ± 0.40 | 0.70 m (1.43 m) |
-| 0.025 m | Interferometry, optimal | 20/20 | +0.013 ± 0.015 | +0.67 ± 0.42 | 0.66 m (1.05 m) |
-| 0.05 m | Kelvin, 1 m grid | 20/20 | +0.059 ± 0.036 | −0.23 ± 0.23 | 1.49 m (1.73 m) |
-| 0.05 m | Interferometry, 1 m grid | 20/20 | +0.021 ± 0.026 | +0.61 ± 0.83 | 1.31 m (2.47 m) |
-| 0.05 m | Interferometry, optimal | 20/20 | +0.001 ± 0.036 | +1.18 ± 1.27 | 1.44 m (2.47 m) |
-| 0.1 m | Kelvin, 1 m grid | 20/20 | +0.90 ± 2.23 | +12.7 ± 64.9 | 50 m (77 m) |
-| 0.1 m | Interferometry, 1 m grid | 15/20 | −0.09 ± 0.15 | +7.6 ± 9.8 | 22 m (84 m) |
-| 0.1 m | Interferometry, optimal | 17/20 | +0.06 ± 0.40 | −2.2 ± 20.2 | 4.4 m (106 m) |
+| 0 | Kelvin, 1 m grid | 100/100 | +0.064 ± 0.001 | −0.28 ± 0.00 | 1.40 m (1.40 m) |
+| 0 | Interferometry, 1 m grid | 100/100 | +0.033 ± 0.000 | +0.41 ± 0.01 | 0.73 m (0.73 m) |
+| 0 | Interferometry, optimal | 100/100 | +0.025 ± 0.000 | +0.52 ± 0.01 | 0.99 m (0.99 m) |
+| 0.025 m | Kelvin, 1 m grid | 100/100 | +0.064 ± 0.013 | −0.28 ± 0.08 | 1.42 m (1.48 m) |
+| 0.025 m | Interferometry, 1 m grid | 100/100 | +0.025 ± 0.011 | +0.43 ± 0.38 | 0.74 m (1.17 m) |
+| 0.025 m | Interferometry, optimal | 100/100 | +0.017 ± 0.013 | +0.63 ± 0.42 | 0.64 m (1.09 m) |
+| 0.05 m | Kelvin, 1 m grid | 100/100 | +0.065 ± 0.028 | −0.27 ± 0.21 | 1.46 m (1.64 m) |
+| 0.05 m | Interferometry, 1 m grid | 100/100 | +0.017 ± 0.024 | +0.63 ± 1.07 | 1.33 m (2.15 m) |
+| 0.05 m | Interferometry, optimal | 100/100 | +0.015 ± 0.028 | +0.86 ± 0.92 | 1.25 m (2.07 m) |
+| 0.1 m | Kelvin, 1 m grid | 100/100 | +0.76 ± 2.06 | +26.1 ± 61.1 | 45 m (88 m) |
+| 0.1 m | Interferometry, 1 m grid | 79/100 | +0.16 ± 0.92 | +5.1 ± 13.8 | 3.3 m (144 m) |
+| 0.1 m | Interferometry, optimal | 88/100 | +0.00 ± 0.22 | +2.5 ± 13.1 | 2.9 m (57 m) |
 
 **What the benchmark shows.**
 
-* **Ferry: interferometry wins on every measure, in every wind.** The Kelvin method of case study 3 carries a fixed course bias of about 2° and a track error of about 540 m, which the wind then increases. Interferometry has no course bias to speak of (below 0.1°), a speed bias below 0.01 m/s and a track error 3 to 9 times smaller. It returned a fix in all 300 runs, while the Kelvin method missed 7 of 300. The optimal 20 m array cuts the interferometry error further at every wind height, by 9 to 22 % in the median and by 23 to 45 % in the 90th percentile. The optimal array with the same footprint helps in calm water (45 m against 65 m) but not in wind.
-* **Boat: interferometry wins in calm water and light wind, but not in moderate wind.** Up to H_s = 0.025 m it roughly halves the track error and the speed bias. Its course, however, carries a bias of +0.4 to +0.7°, against −0.27° for the cusp-line method, and its course spread is larger. At H_s = 0.05 m the median track errors are equal, but the cusp-line method is more precise: course spread 0.23° against 0.8 to 1.3°, and a smaller 90th percentile. The boat's wake lasts only a few seconds at each array and overlaps the wind sea in frequency, so the four arrays together yield only about 60 coherent observations, while the cusp-line pick averages the envelope over the whole wake band. From H_s = 0.1 m both methods break down. The Kelvin method still returns a track every time, with errors of tens of metres. Interferometry returns no track in 3 to 5 of 20 runs at H_s = 0.1 m and in most or all runs above that, which at least flags the failure.
-* **Geometry.** For the boat, the optimal grid removes aliasing and helps in light wind (90th percentile 1.05 m against 1.43 m) and at H_s = 0.1 m (median 4.4 m, 17 of 20 fixes, against 22 m and 15 of 20). In calm water and at H_s = 0.05 m it is no better than the 1 m grid.
+* **Ferry: interferometry is more accurate in every wind, by a factor that shrinks as the wind rises.** The Kelvin method of case study 3 carries a course bias of +0.5 to +0.7° and a track error of about 400 m, which comes from its chirp fit (see case study 3) and hardly changes up to H_s = 0.45 m. Interferometry has a course bias below 0.1° and a speed bias of 0.005 m/s or less. Its median track error is 5.9 times smaller in calm water, 3.0 times at H_s = 0.3 m and 1.9 times at 0.6 m, because its error grows with the wind while the Kelvin error is dominated by the fixed bias. The run-to-run spread of the course is similar for both methods up to H_s = 0.3 m (0.1°); above that the Kelvin spread is three times larger. Interferometry returned a fix in all 1500 runs. The Kelvin method gave none in 52 of 1500 (19 of 500 on the Rätsep grid): in each, the chirp fit put the analysis window outside the record.
+* **Boat: interferometry is more accurate in calm water and light wind, less precise in moderate wind.** Up to H_s = 0.025 m it halves the track error and the speed bias. Its course, however, carries a bias of +0.4 to +0.6°, against −0.28° for the cusp-line method, and a larger spread. At H_s = 0.05 m the median track errors are close (1.33 m against 1.46 m), but the cusp-line method is more precise: course spread 0.21° against 1.07°, and a 90th percentile of 1.64 m against 2.15 m. The boat's wake lasts only a few seconds at each array and overlaps the wind sea in frequency, so the four arrays together yield only about 60 coherent observations, while the cusp-line pick averages the envelope over the whole wake band. At H_s = 0.1 m the cusp-line method returns a track every time, but with a median error of 45 m. Interferometry returns a track in 79 of 100 runs, most of them good (median 3.3 m) and some far off (90th percentile 144 m). Above that both fail, and interferometry mostly says so: it returns no track in 361 of 1200 runs, nearly all for lack of coherent observations.
+* **Geometry, compared seed by seed.** For the ferry, the optimal 20 m array beats the Rätsep grid in 93 of 100 calm runs and in 242 of 400 runs with wind (sign test and Wilcoxon p < 0.001). The median gain is 9 m in calm water and 15 to 46 m in wind, 13 to 28 % of the median error and 19 to 33 % of the 90th percentile. At a single wind height the gain is not always significant (57 of 100 at H_s = 0.6 m). The optimal array with the same footprint helps in calm water (48 m against 68 m, all 100 runs) and at H_s = 0.6 m (65 of 100), but not in between; over all runs with wind it wins 211 of 400, which is no better than chance (p = 0.29). For the boat, the optimal grid is worse than the 1 m grid in calm water (0.99 m against 0.73 m, all 100 runs), better in light wind (67 of 100 at H_s = 0.025 m, p = 0.001), and not significantly different at 0.05 m and 0.1 m, although it returns more fixes at 0.1 m (88 against 79) with a smaller 90th percentile.
 
-So the claim holds for the ferry and does not hold in general for the boat. In the ferry case, interferometry is more accurate, more precise and more robust to wind than the Kelvin method, and the optimized array adds to that. In the boat case, interferometry is more accurate in calm water, but in moderate wind the cusp-line method is more precise.
+So the claim holds for the ferry and does not hold in general for the boat. In the ferry case, interferometry is 2 to 6 times more accurate than the Kelvin method and never fails to give a fix, and a wider optimized array adds a further 13 to 28 %. Part of the Kelvin error is a bias of its chirp fit that a better fit could remove, so the factor says more about this implementation than about Kelvin theory. Optimizing the geometry inside the same footprint gives little. In the boat case, interferometry is more accurate in calm water and light wind, but in moderate wind the cusp-line method is more precise.
 
 ![Figure 7](docs/img/fig08_interferometry.png)
 
-**Figure 7.** Case study 4. **a**, the Rätsep et al. grid (grey squares) and the optimal 3 × 3 grids for the ferry band with the same 7.1 m footprint (blue) and a 20 m footprint (red). **b**, their correlation patterns at 0.3 Hz for a wave from 0°: the wide grid has a narrow main lobe and low sidelobes. **c**, their bearing Cramér-Rao bounds relative to the Rätsep grid. **d**, the interferometric observations of one ferry passage (optimal 20 m grid, wind sea H_s = 0.3 m): the transverse branch, the divergent branch and the cusp emerge from direction finding alone, without a Kelvin model. The grey cells are spectral-leakage sidelobes of the strong transverse peak, rejected because they do not fit a single moving source. **e**, the true track, the Kelvin track of case study 3 and the interferometry track, from the same record. **f**, **g**, median track error (shading: 25th to 75th percentile, 20 runs) against wind-sea height for the ferry and the boat. A point is missing where fewer than half the runs gave a fix.
+**Figure 7.** Case study 4. **a**, the Rätsep et al. grid (grey squares) and the optimal 3 × 3 grids for the ferry band with the same 7.1 m footprint (blue) and a 20 m footprint (red). **b**, their correlation patterns at 0.3 Hz for a wave from 0°: the wide grid has a narrow main lobe and low sidelobes. **c**, their bearing Cramér-Rao bounds relative to the Rätsep grid. **d**, the interferometric observations of one ferry passage (optimal 20 m grid, wind sea H_s = 0.3 m): the transverse branch, the divergent branch and the cusp emerge from direction finding alone, without a Kelvin model. The grey cells are spectral-leakage sidelobes of the strong transverse peak, rejected because they do not fit a single moving source. **e**, the true track, the Kelvin track of case study 3 and the interferometry track, from the same record. **f**, **g**, median track error (shading: 25th to 75th percentile, 100 runs) against wind-sea height for the ferry and the boat. A point is missing where fewer than half the runs gave a fix.
 
 **Assumptions.** The ferry wake is synthesized with deep-water dispersion (as in case study 3), so the interferometry uses deep-water dispersion there too; the boat case uses the 3 m depth of the solver. Both methods assume a straight track at constant speed. The wind sea is linear, so it is added to the recorded wake. The plane-wave model needs the aperture to be small compared with the distance to the track, which limits how wide an array can usefully be for near targets. The analysis windows (120 s for the ferry, 6 s for the boat) are chosen per scenario; for the boat, where the source moves 18 m in one window, each cell is dated by the power-weighted time of its wave group (`time_stamp="centroid"`) rather than the window centre.
 

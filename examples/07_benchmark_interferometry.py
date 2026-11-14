@@ -17,7 +17,7 @@ phases, frequencies and directions) and of the sensor noise are added to the
 same wake. Wind is added linearly to the recorded wake (linear theory). Every
 geometry and method sees the same seeds, so runs can be compared in pairs.
 
-Run:  python examples/07_benchmark_interferometry.py            (100 seeds, about 2 h on 4 cores)
+Run:  python examples/07_benchmark_interferometry.py            (100 seeds, about 30 min on 4 cores)
       N_SEEDS=5 python examples/07_benchmark_interferometry.py ferry      (a quick partial run)
 
 The full run writes docs/data/ci_benchmark.csv. A partial run (one case only,

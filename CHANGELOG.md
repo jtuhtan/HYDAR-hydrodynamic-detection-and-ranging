@@ -11,15 +11,17 @@ Adds case study 4: a method that designs the 3 × 3 array geometry for correlati
 - `wind_sea_head`: finite-depth wind sea as pressure head at the sensor depth, to add wind noise to `SpectralSolver` records.
 - `SensorArray(layout=...)` for arrays with any sensor positions.
 - `examples/06_array_design.py`: designs the optimal grids for the ferry band (same 7.1 m footprint as the Rätsep et al. grid, and a 20 m footprint), records the case study 3 ferry passage with each in a 0.3 m wind sea, and compares the Kelvin method with interferometry (about 2 minutes).
-- `examples/07_benchmark_interferometry.py`: 540 Monte Carlo runs over wind-sea heights for both vessel scenarios, geometries and methods; results in `docs/data/ci_benchmark.csv`.
+- `examples/07_benchmark_interferometry.py`: 2700 Monte Carlo records (100 seeds) over wind-sea heights for both vessel scenarios, geometries and methods; results in `docs/data/ci_benchmark.csv`.
 - README case study 4 with Figure 7, five tests in `tests/test_interferometry.py`, and three references (Fischler & Bolles 1981, Lighthill 1978, Van Trees 2002).
 
 ### Case study 4 results
 
 | Scenario | Result |
 |---|---|
-| Ferry, one array 2.5 km away, wind sea 0 to 0.6 m | Interferometry better on every measure: course bias below 0.1° (Kelvin method about 2°), track error 3 to 9 times smaller (Hs 0.3 m: median 103 m with the optimal 20 m array vs 537 m), fixes in 300/300 runs (Kelvin 293/300). The optimal 20 m array lowers the error a further 9 to 22 % (median) |
-| Boat, four arrays 8 to 18 m away, wind sea 0 to 0.2 m | Mixed. Calm and light wind: interferometry roughly halves track error and speed bias. Hs 0.05 m: equal median track error, but the cusp-line method is more precise in course (0.23° vs 0.8 to 1.3° spread). Hs ≥ 0.1 m: both fail |
+| Ferry, one array 2.5 km away, wind sea 0 to 0.6 m | Interferometry more accurate in every wind: course bias below 0.1° (Kelvin method +0.5 to +0.7°), median track error 5.9 times smaller in calm water, 3.0 times at Hs 0.3 m (131 m vs 397 m) and 1.9 times at 0.6 m, fixes in 1500/1500 runs (Kelvin 1448/1500). The optimal 20 m array lowers the median error a further 13 to 28 % (better in 242 of 400 paired runs with wind, p < 0.001). The optimal array with the same footprint helps only in calm water and at Hs 0.6 m |
+| Boat, four arrays 8 to 18 m away, wind sea 0 to 0.2 m | Mixed. Calm and light wind: interferometry halves track error and speed bias. Hs 0.05 m: similar median track error, but the cusp-line method is more precise in course (0.21° vs 1.07° spread). Hs ≥ 0.1 m: both degrade; interferometry returns fewer but mostly better tracks at 0.1 m |
+
+100 seeds per wind height, 2 Pa sensor noise, Kelvin baseline retuned (see Changed). The first version of this benchmark (20 seeds, before the repository review) reported a Kelvin course bias of 2° and a factor of 3 to 9; most of that bias came from the baseline's analysis window.
 
 ### Changed
 
@@ -27,7 +29,7 @@ Adds case study 4: a method that designs the 3 × 3 array geometry for correlati
 - **Kelvin method of case study 3 retuned** after the repository review of 2026-11-14 (`repository_review/`), so that the benchmark compares against a fair baseline:
   - `locate_vessel` measures the cusp-wave direction in the 30 s before the cusp (`cusp_window`), not from 10 s before to 30 s after it. Behind the cusp line the two wake branches overlap and bias the course.
   - `ridge_points` interpolates each spectrogram peak between frequency bins.
-  - `wave_direction` uses the unbiased cross-correlation. The raw correlation pulled the delays of a narrow-band signal towards zero and overstated the phase speed by 5 to 45 %.
+  - `wave_direction` uses the unbiased cross-correlation. The raw correlation pulled the delays of a narrow-band signal towards zero and overstated the phase speed by 5 to 46 %. It now fits in two passes (short baselines first, then all pairs within half a period of the predicted delay), so that long baselines of a wide array do not lock one period off.
   - Case study 3 now reads: distance 2403 m (was 2390), course 0.7° off (was 1.9°), position 365 m off (was 463 m).
 - Sensor noise is a property of the array (`SensorArray(noise_pa=..., noise_seed=...)`) and is added after the pressure model. Before, `record_passage` added it to the surface elevation, so the depth filter reduced the stated 2 Pa to 0.14 Pa.
 - `wind_sea` takes `f_range`, `depth` and `z`; `wind_sea_head` now calls it. `stacked_spectrogram`, `fit_chirp` and `wave_direction` expose constants that were fixed for the ferry scenario (`sensors`, `d_guesses`, `min_speed`). `track_vessel` passes `peak_rel` on to `observe`.
@@ -40,7 +42,7 @@ Adds case study 4: a method that designs the 3 × 3 array geometry for correlati
 
 ### Tests and CI
 
-- 13 new tests (40 in total), among them the boat path of case study 4, `pick_wake`, `wave_direction`, the wind sea height, the sensor noise level and the benchmark under `spawn` and `forkserver`.
+- 14 new tests (41 in total), among them the boat path of case study 4, `pick_wake`, `wave_direction`, the wind sea height, the sensor noise level and the benchmark under `spawn` and `forkserver`.
 - GitHub Actions runs the fast tests on every pull request, on Python 3.9 with the oldest supported numpy, scipy and matplotlib and on Python 3.13 with the newest; all tests run weekly.
 
 ## v1.0.0 (2026-11-02)
