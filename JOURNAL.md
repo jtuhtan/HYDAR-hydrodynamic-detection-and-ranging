@@ -27,8 +27,24 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
   016 (`KelvinShip.wake` hard-codes rho = 1000), 017 (32 MB of figures in git history; LFS or release assets
   is Jeff's decision). Review and remediation were merged with PR #4 (cf4f657, merge commit, so the
   commit hashes cited in the review stay valid).
+- **Case study 5: distance depends on the wake-ageing model.** The fish's range comes from core growth and bed-friction decay, so a wrong eddy viscosity or roughness biases it by 1.3 to 2.8 m at 6 m; D is 23 to 29 % too large at 3 m (near wake). Untried: a fish that swims upstream along the found line, two surveys at different distances (ratio method), a body-bound flow model for the fish (it is a passive probe now), and the version number for this addition (CHANGELOG "Unreleased"; Jeff decides). Start at `hydar/karman.py` (`locate_rock`, `_fit`) and `examples/09_benchmark_fish_rock.py`.
+- **New references unverified by Jeff (case study 5):** Chen & Jirka (1995, doi 10.1016/0169-5983(95)00053-G), Chow (1959), Liao et al. (2003, doi 10.1126/science.1088295), von Kármán (1911), Williamson (1996, doi 10.1146/annurev.fl.28.010196.002401).
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
+
+## 2026-11-14 — A fish finds the line to a rock from its vortex street to a few centimetres; the distance is only as good as the wake model
+
+**Decided** (Jeff: river with a trapezoidal section, hemisphere rock 50 % above the surface, 25 cm fish, 10 sensors, 5 on the head third and 5 along the middle third, none on the tail third, rock found from its Kármán vortex): case study 5, `hydar/karman.py`, examples 08 and 09, Figure 8 (`fig09_fish_rock`), PR on branch `claude/project-thread-qmz92f`. Assumptions Claude chose (not Jeff's): 4 m bed, 1 : 2 banks, 0.25 m depth, slope 0.002, Manning n 0.035 (U = 0.48 m/s at the rock); "50 % above the surface" read as half the height, so R = 2 h = 0.5 m; shedding at the depth-averaged diameter (D = 3.83 h); St 0.2, U_c = 0.88 U, b/λ = 0.281, circulation from von Kármán's self-induced speed, formation at 1.5 D, Lamb-Oseen cores r0 = 0.1 D growing with ν_t = 0.01 U D, decay c_f U / h; banks as images; sensors evenly spaced 1.67 cm apart; turbulence RMS ρ (0.1 U)², integral scale h. The fish holds 19 stations across the river, 0.2 m apart, 60 s each.
+Method: frequency from the averaged spectrum; U_c and the upstream direction from the phase slope along the body; D = St U / f; lateral position and distance from a fit of the model's lateral profiles of f and 2f (both readings f and f/2 of the strongest line are fitted; a reading needs its line at f at least 3 times the noise).
+**Rejected**:
+- A stationary fish: one line of sensors along the body cannot tell which side of the street it is on (the street is mirror symmetric with a half-period shift), so the fish steps across the river.
+- Range from bed-friction decay alone: its length scale is about 20 m here, too slow to range over a few metres; core growth by turbulent diffusion carries most of the distance information.
+- Log-amplitude residuals in the profile fit: noise-only stations dominated and the fit picked the near-field minimum (3.4 m for a true 6 m); residuals in amplitude, normalized by the noise, fixed it.
+- Taking the strongest line as the fundamental after a subharmonic test on the spectrum: river turbulence near f/2 made the test unreliable; fitting both readings and comparing the misfit works.
+- Turbulence pressure ρ U u′ (23 Pa RMS at 10 %): far above the ρ u′² scaling of turbulent pressure; replaced by an RMS of ρ (Tu U)² (2.3 Pa).
+**Found during the work**: the Lamb-Oseen pressure first had a sign error in its (1 − e^−s)²/s term (unary minus applied after the square), which made 2f peak on the centreline; `test_lamb_oseen_pressure_is_cyclostrophic` caught it, and the benchmark was rerun after the fix. With the correct pressure, 2f is weak on the centreline and strongest near the rows.
+**Confirmed by**: `tests/test_karman.py` (10 tests); benchmark of 625 runs, 25 seeds per setting (`docs/data/fish_rock_benchmark.csv`). Lateral median error 1 to 4 cm at 3 to 9 m and Tu up to 10 %, and 4 cm or less under every wrong-model variant except U_c/U = 0.95 (weak street, 0.26 m). D within 1 to 3 % at 6 to 9 m, but +23 to +29 % at 3 m (near wake). Distance: median error 0.13 to 0.29 m at 6 to 9 m with the right model; biased by −1.6/+2.2 m for ν_t × 0.5/× 2, −1.3/+2.8 m for n 0.025/0.05, −1.9 m for U_c/U 0.80; 13 of 25 detections at 12 m in 15 % turbulence.
+**Open**: see Open threads (ranging model dependence, fish body flow, new references).
 
 ## 2026-11-14 — Version is 1.2.0; v1.1.0 was never released on its own
 

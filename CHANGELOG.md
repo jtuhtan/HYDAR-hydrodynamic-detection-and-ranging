@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Case study 5: a fish finds a rock from its Kármán vortex street** (`hydar.karman`). A hemispherical rock, half of its height above the water, in a river with a trapezoidal cross section sheds a vortex street; a 25 cm fish with 10 lateral-line pressure sensors (5 on the head third, 5 on the middle third, none on the tail third) surveys the river across the flow and estimates the rock's lateral position, size and distance. `TrapezoidalChannel` (Manning flow), `HemisphereRock`, `KarmanStreet` (kinematic street: Strouhal shedding, von Kármán spacing and circulation, Lamb-Oseen cores with eddy-viscosity growth, bed-friction decay, banks as images, unsteady Bernoulli pressure), `Fish`, `RiverTurbulence`, `lateral_survey` and `locate_rock`.
+- `examples/08_fish_rock.py` (about 10 s) and `examples/09_benchmark_fish_rock.py` (625 runs, about 30 minutes on 4 cores; results in `docs/data/fish_rock_benchmark.csv`).
+- README case study 5 with Figure 8 (`docs/make_figures.py 7`), 10 tests in `tests/test_karman.py`, and five references (Chen & Jirka 1995, Chow 1959, Liao et al. 2003, von Kármán 1911, Williamson 1996).
+
+### Case study 5 results
+
+| Quantity | Result |
+|---|---|
+| Lateral position | Median error 1 to 4 cm from 3 to 9 m behind the rock in turbulence up to 10 %, also when the wake model is wrong |
+| Rock size D | Within 1 to 3 % at 6 to 9 m; 23 to 29 % too large at 3 m, where the street is still forming; carries any error of the assumed Strouhal number |
+| Distance | Median error 0.13 to 0.29 m at 6 to 9 m with the right wake model; biased by 1.3 to 2.8 m when the eddy viscosity or bed roughness of the true wake differ by a factor of 1.5 to 2; detection fails in half the runs at 12 m in 15 % turbulence |
+
 ## v1.2.0 (2026-11-14)
 
 Applies the repository review of 2026-11-14 (`repository_review/`). The Kelvin method of case study 3 is retuned, so that the benchmark of case study 4 compares against a fair baseline, and the benchmark is rerun with 100 seeds. The results of case studies 3 and 4 change; the conclusions for the ferry are weaker than in v1.1.0 and are stated below.

@@ -14,6 +14,7 @@ numbers differ because the map at the top of the README has no number:
     4   fig05_series60_hull, fig06_boat_tracking    Figures 4 and 5
     5   fig07_vessel_localization                   Figure 6
     6   fig08_interferometry                        Figure 7
+    7   fig09_fish_rock                             Figure 8
 """
 
 import sys
@@ -537,8 +538,172 @@ def fig_interferometry():
     return fix, ci
 
 
+# ------------------------------------------------------------------ fig 9
+def fig_fish_rock():
+    import csv
+    from hydar.karman import (Fish, HemisphereRock, KarmanStreet, RiverTurbulence, TrapezoidalChannel,
+                              lateral_survey, locate_rock)
+    ch = TrapezoidalChannel()
+    rock = HemisphereRock.from_protrusion(ch, 0.0, 0.4)
+    st = KarmanStreet(ch, rock, phase=3.0)
+    L = 0.25
+    stations = np.round(np.arange(-1.8, 1.81, 0.2), 2)
+    turb = RiverTurbulence(st.U, intensity=0.10, scale=ch.depth, seed=1)
+    sv = lateral_survey(st, 6.0 - L / 3, stations, turbulence=turb, seed=1)
+    fix = locate_rock(sv)
+    rows = list(csv.DictReader(open(ROOT / "docs" / "data" / "fish_rock_benchmark.csv")))
+
+    # manual layout: the equal-aspect panels collapse matplotlib's constrained layout
+    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 172 * pf.MM))
+    fig.set_layout_engine("none")
+    gs = fig.add_gridspec(4, 6, height_ratios=[1.05, 0.6, 0.9, 0.95], left=0.09, right=0.95,
+                          bottom=0.06, top=0.97, hspace=0.62, wspace=1.6)
+    a = fig.add_subplot(gs[0, :])
+    b = fig.add_subplot(gs[1, :3])
+    c = fig.add_subplot(gs[1, 3:])
+    d = fig.add_subplot(gs[2, :2])
+    e = fig.add_subplot(gs[2, 2:4])
+    f = fig.add_subplot(gs[2, 4:])
+    g = fig.add_subplot(gs[3, :3])
+    h = fig.add_subplot(gs[3, 3:])
+
+    # a: plan view with a snapshot of the street's pressure
+    W = ch.top_width
+    xg = np.arange(-1.0, 14.0, 0.04)
+    yg = np.arange(-W / 2, W / 2 + 1e-9, 0.04)
+    X, Y = np.meshgrid(xg, yg, indexing="ij")
+    t_snap = sv.t[10, 0]
+    P = st.pressure(X.ravel(), Y.ravel(), [t_snap]).reshape(X.shape)
+    m = a.imshow(P.T, origin="lower", extent=(xg[0], xg[-1], yg[0], yg[-1]), cmap=FIELD_CMAP,
+                 vmin=-20, vmax=20, interpolation="bilinear", rasterized=True, aspect="equal")
+    for sgn in (1, -1):
+        a.fill_between([xg[0], xg[-1]], sgn * ch.bed_width / 2, sgn * W / 2, color=C["light"], alpha=0.6, lw=0)
+    a.text(13.8, 2.25, "bank", fontsize=6.5, ha="right", va="center", color=C["dark"])
+    rw = 0.5 * rock.waterline_diameter(ch.depth)
+    a.add_patch(plt.Circle((rock.x, rock.y), rw, fc=C["grey"], ec=C["ink"], lw=0.6))
+    a.plot(np.full(stations.size, sv.x_center), stations, "|", color=C["ink"], ms=3, mew=0.6)
+    fish_y = stations[np.argmax(fix.A1)]
+    a.plot([sv.x_snout, sv.x_snout + L], [fish_y, fish_y], color=C["ink"], lw=2.2, solid_capstyle="round")
+    a.annotate("fish survey\n(19 stations)", xy=(sv.x_center, -1.8), xytext=(7.4, -1.55), fontsize=6.5,
+               va="center", arrowprops=dict(arrowstyle="-", lw=0.5, color=C["ink"]))
+    a.plot(rock.x, rock.y, "o", mfc="none", mec=C["ink"], ms=4, mew=0.8)
+    a.plot(fix.x, fix.y, "+", color=C["red"], ms=8, mew=1.4)
+    a.text(rock.x + 0.6, rock.y + 0.45, "rock", fontsize=6.5, va="bottom")
+    pf.flow_arrow(a, (0.02, 0.12), dxdy=(0.06, 0), text="Flow")
+    a.set(xlabel="x (m)", ylabel="y (m)", xlim=(xg[0], xg[-1]), ylim=(-W / 2, W / 2),
+          xticks=[0, 2, 4, 6, 8, 10, 12, 14], yticks=[-2, 0, 2])
+    pf.colorbar(fig, m, a, "p (Pa)")
+
+    # b: cross section (no vertical exaggeration)
+    yy = np.linspace(-W / 2, W / 2, 401)
+    zb = ch.depth - ch.local_depth(yy)
+    b.fill_between(yy, zb, ch.depth, color=C["cyan"], alpha=0.25, lw=0)
+    b.fill_between(yy, -0.1, zb, color=C["light"], lw=0)
+    b.plot(yy, zb, color=C["ink"], lw=0.8)
+    b.plot([-W / 2, W / 2], [ch.depth, ch.depth], color=C["blue"], lw=0.8)
+    th = np.linspace(0, np.pi, 100)
+    b.fill(rock.y + rock.radius * np.cos(th), rock.radius * np.sin(th), fc=C["grey"], ec=C["ink"], lw=0.6)
+    b.add_patch(__import__("matplotlib").patches.Ellipse((-1.2, 0.12), 0.05, 0.06, fc=C["ink"]))
+    b.text(-1.28, 0.12, "fish", fontsize=6.5, ha="right", va="center")
+    b.set(xlabel="y (m)", ylabel="z (m)", xlim=(-W / 2, W / 2), ylim=(-0.1, 0.55), yticks=[0, 0.25, 0.5])
+    b.set_aspect("equal")
+
+    # c: the fish and its lateral line
+    s = np.linspace(0, 1, 200)
+    half = 0.11 * L * np.sqrt(np.clip(s, 0, 1)) * (1 - s) ** 0.8 * 2.2
+    xs = s * L * 100
+    c.fill_between(xs, -half * 100, half * 100, color=C["light"], ec=C["ink"], lw=0.6)
+    c.fill([L * 100, L * 100 + 3, L * 100 + 3], [0, 2.2, -2.2], color=C["light"], ec=C["ink"], lw=0.6)
+    sens = Fish(0, 0).sensor_offsets * 100
+    c.plot(sens, np.zeros_like(sens), "o", color=C["red"], ms=3.2, mew=0)
+    for k, lab in enumerate(("head", "middle", "tail\n(no sensors)")):
+        if k:
+            c.axvline(k * L * 100 / 3, color=C["dark"], lw=0.6, ls="--")
+        c.text((k + 0.5) * L * 100 / 3, 3.6, lab, fontsize=6.5, ha="center", va="bottom")
+    c.set(xlabel="Distance from the snout (cm)", xlim=(-1, 29), ylim=(-4, 8), yticks=[],
+          xticks=[0, 5, 10, 15, 20, 25])
+    c.spines["left"].set_visible(False)
+    c.set_aspect("equal")
+
+    # d: head and mid-body pressure at the station with the strongest street
+    from scipy.signal import butter, sosfiltfilt
+    k = int(np.argmax(fix.A1))
+    tt = sv.t[k] - sv.t[k, 0]
+    sos = butter(4, 1.0, fs=sv.fs, output="sos")             # 1 Hz low-pass, for display only
+    d.plot(tt, sosfiltfilt(sos, sv.p[k, 0]), color=C["blue"], lw=0.8, label="Sensor 1 (head)")
+    d.plot(tt, sosfiltfilt(sos, sv.p[k, -1]), color=C["red"], lw=0.8, label="Sensor 10 (mid-body)")
+    d.set(xlabel="Time (s)", ylabel="p (Pa)", xlim=(10, 30), xticks=[10, 20, 30], ylim=(-30, 22))
+    d.grid(True)
+    pf.legend(d, loc="upper left", fontsize=6, ncol=1)
+
+    # e: lateral profiles, measured and fitted
+    yf = np.linspace(-2, 2, 401)
+    m1, m2 = fix.model.harmonic_profile(fix.distance, yf - fix.y)
+    e.plot(stations, fix.A1, "o", color=C["blue"], ms=2.8, mew=0, label="f, measured")
+    e.plot(stations, fix.A2, "s", color=C["orange"], ms=2.6, mew=0, label="2f, measured")
+    e.plot(yf, np.sqrt(m1 ** 2 + fix.noise1 ** 2), color=C["blue"], lw=0.9, label="f, fitted model")
+    e.plot(yf, np.sqrt(m2 ** 2 + fix.noise2 ** 2), color=C["orange"], lw=0.9, label="2f, fitted model")
+    e.axvline(rock.y, color=C["ink"], lw=0.6, ls=":")
+    e.set(xlabel="y (m)", ylabel="Amplitude (Pa)", xlim=(-2, 2), xticks=[-2, -1, 0, 1, 2],
+          ylim=(0, 1.75 * max(fix.A1.max(), fix.A2.max())))
+    e.grid(True)
+    pf.legend(e, loc="upper left", fontsize=5.5, ncol=2)
+
+    # f: misfit over distance and lateral position
+    cst = np.log10(fix.misfit / fix.misfit.min())
+    f.pcolormesh(fix.yc_grid, fix.dx_grid, cst, cmap="Greys_r", vmin=0, vmax=2.5, shading="auto",
+                 rasterized=True)
+    f.plot(rock.y, sv.x_center - rock.x, "o", mfc="none", mec=C["cyan"], ms=5, mew=1.0)
+    f.plot(fix.y, fix.distance, "+", color=C["red"], ms=7, mew=1.3)
+    f.set(xlabel="Rock y (m)", ylabel="Distance (m)", xlim=(-1.8, 1.8), ylim=(1, 20), xticks=[-1, 0, 1])
+
+    # g: benchmark, distance error against distance and turbulence
+    dist = sorted({float(r["distance_m"]) for r in rows if r["case"] == "distance"})
+    for ti, col, mk in ((0.0, C["dark"], "o"), (0.05, C["blue"], "s"), (0.10, C["red"], "^"),
+                        (0.15, C["orange"], "D")):
+        med, lo, hi = [], [], []
+        for dd in dist:
+            v = [abs(float(r["err_distance"])) for r in rows if r["case"] == "distance"
+                 and float(r["distance_m"]) == dd and float(r["turbulence"]) == ti and r["detected"] == "1"]
+            n_all = sum(1 for r in rows if r["case"] == "distance" and float(r["distance_m"]) == dd
+                        and float(r["turbulence"]) == ti)
+            if len(v) < 0.5 * n_all:
+                med.append(np.nan), lo.append(np.nan), hi.append(np.nan)
+                continue
+            med.append(np.median(v)), lo.append(np.percentile(v, 25)), hi.append(np.percentile(v, 75))
+        g.plot(dist, med, "-" + mk, color=col, lw=1.0, ms=3, label=f"Tu {100 * ti:.0f} %")
+        g.fill_between(dist, lo, hi, color=col, alpha=0.12, lw=0)
+    g.set(xlabel="Distance behind the rock (m)", ylabel="|Distance error| (m)", xticks=dist, yscale="log",
+          ylim=(0.01, 20))
+    g.grid(True)
+    pf.legend(g, loc="upper left", fontsize=6, ncol=2)
+
+    # h: benchmark, wrong wake model
+    names = ["nominal", "St 0.17", "St 0.23", "kappa 0.80", "kappa 0.95", "nu_t x0.5", "nu_t x2",
+             "Manning n 0.025", "Manning n 0.050"]
+    labels = ["Model right", "St 0.17", "St 0.23", "κ 0.80", "κ 0.95", "ν$_t$ × 0.5", "ν$_t$ × 2",
+              "n 0.025", "n 0.050"]
+    mean, sd = [], []
+    for nm in names:
+        v = [float(r["err_distance"]) for r in rows if r["case"] == "mismatch" and r["variant"] == nm
+             and r["detected"] == "1"]
+        mean.append(np.median(v) if v else np.nan)
+        sd.append([np.median(v) - np.percentile(v, 25), np.percentile(v, 75) - np.median(v)] if v else [0, 0])
+    yy = np.arange(len(names))[::-1]
+    h.barh(yy, mean, xerr=np.array(sd).T, color=[C["dark"]] + [C["grey"]] * (len(names) - 1), height=0.6,
+           error_kw=dict(lw=0.6, capsize=1.5))
+    h.axvline(0, color=C["ink"], lw=0.6)
+    h.set(yticks=yy, xlabel="Distance error (m), true wake ≠ fish's model")
+    h.set_yticklabels(labels, fontsize=6.5)
+    h.grid(True, axis="x")
+
+    pf.panel_labels([a, b, c, d, e, f, g, h])
+    pf.save(fig, "fig09_fish_rock", outdir=OUT)
+    return fix
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["1", "2", "3", "4", "5", "6"]
+    which = sys.argv[1:] or ["1", "2", "3", "4", "5", "6", "7"]
     if "1" in which:
         fig_open_boundary()
     if "2" in which:
@@ -555,3 +720,5 @@ if __name__ == "__main__":
         print(fig_vessel())
     if "6" in which:
         print(*fig_interferometry(), sep="\n")
+    if "7" in which:
+        print(fig_fish_rock())

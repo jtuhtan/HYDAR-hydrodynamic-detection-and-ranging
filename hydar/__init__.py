@@ -3,7 +3,8 @@
 Simulate objects in water (dropped spheres, boats, ships), record the surface
 waves they make with pressure sensor arrays, and locate the source: drops by
 time of flight, vessels from their wakes (hydar.locate, hydar.kelvin,
-hydar.interferometry).
+hydar.interferometry), and rocks in rivers from their Karman vortex
+streets (hydar.karman).
 """
 
 from .solver import Grid, Solver, pml_profile
