@@ -11,7 +11,7 @@
 | Repository type | Code-first research simulator (Python package, tests, examples, one benchmark data file) |
 | Environment used | Python 3.13.18, numpy 2.5.3, scipy 1.18.1, matplotlib 3.11.2, Linux, 4 cores |
 | Finding prefix | `HYDAR-###` (permanent; a re-review keeps the IDs and updates the status) |
-| Source changes made | None. This review adds only this file and one JOURNAL.md entry. |
+| Source changes made | None by the review. The findings were remediated afterwards; see sections 7 and 15 for the status of each. |
 
 ## 2. Executive assessment
 
@@ -32,6 +32,8 @@ The headline finding is **HYDAR-001**: the Kelvin baseline in the ferry benchmar
 | High | 2 | HYDAR-001, HYDAR-002 |
 | Medium | 7 | HYDAR-003 to HYDAR-009 |
 | Low | 9 | HYDAR-010 to HYDAR-018 |
+
+**Status after remediation (2026-11-14, same day).** The text of this review describes commit `8d45565` and is left as written. Both High findings and six of the seven Medium ones are resolved; section 7 gives the status of each finding and section 15 the commits. Two findings were added during the work (HYDAR-019, resolved; HYDAR-020, open).
 
 ## 3. Scope and method
 
@@ -93,24 +95,26 @@ The project defines no other gates. Examples 04, 06 and the animation and figure
 
 | ID | Severity | Status | Finding |
 |---|---|---|---|
-| HYDAR-001 | High | Open | The ferry benchmark's Kelvin baseline has a 2.0° course bias set by its analysis window; a different window gives 0.3° |
-| HYDAR-002 | High | Open | The benchmark script only works with the `fork` start method |
-| HYDAR-003 | Medium | Open | The array-geometry claims rest on 20 seeds and are not significant seed by seed |
-| HYDAR-004 | Medium | Open | The benchmark counts any exception as "no fix"; the 7 Kelvin misses are an unguarded crash |
-| HYDAR-005 | Medium | Open | Same-footprint "optimal" designs sit on the `min_spacing` bound |
+| HYDAR-001 | High | Resolved (`01e1c49`, `5a322d6`); remaining bias is HYDAR-020 | The ferry benchmark's Kelvin baseline has a 2.0° course bias set by its analysis window; a different window gives 0.3° |
+| HYDAR-002 | High | Resolved (`df0020f`) | The benchmark script only works with the `fork` start method |
+| HYDAR-003 | Medium | Resolved (`df0020f`, `7050e25`) | The array-geometry claims rest on 20 seeds and are not significant seed by seed |
+| HYDAR-004 | Medium | Resolved (`01e1c49`, `df0020f`) | The benchmark counts any exception as "no fix"; the 7 Kelvin misses are an unguarded crash |
+| HYDAR-005 | Medium | Resolved (`01e1c49`, `01e38bf`): documented as constraint-bound | Same-footprint "optimal" designs sit on the `min_spacing` bound |
 | HYDAR-006 | Medium | Open (tracked in JOURNAL) | The ferry case combines deep-water wave kinematics with a 3 m deep site |
-| HYDAR-007 | Medium | Open | `SpectralSolver` silently ignores volume sources such as `DropObject` |
-| HYDAR-008 | Medium | Open | No CI; the declared minimum versions are untested |
-| HYDAR-009 | Medium | Open | The boat half of case study 4 and several analysis functions have no tests |
+| HYDAR-007 | Medium | Resolved (`01e1c49`) | `SpectralSolver` silently ignores volume sources such as `DropObject` |
+| HYDAR-008 | Medium | Resolved (`df0020f`, `c8bd89d`) | No CI; the declared minimum versions are untested |
+| HYDAR-009 | Medium | Resolved (`01e1c49`, `df0020f`, `5a322d6`) | The boat half of case study 4 and several analysis functions have no tests |
 | HYDAR-010 | Low | Open (tracked in JOURNAL) | CITATION.cff pairs version v1.1.0 with the v1.0.0 DOI |
-| HYDAR-011 | Low | Open | Sensor noise in `airy` records is 0.14 Pa, not the stated 2 Pa |
-| HYDAR-012 | Low | Open | Edge inputs raise unhelpful errors or return the wrong shape |
-| HYDAR-013 | Low | Open | Documentation drift (test count, Huber against Cauchy, package description) |
-| HYDAR-014 | Low | Open | A partial benchmark run overwrites the full CSV; examples write PNGs into the working directory |
-| HYDAR-015 | Low | Open | Scenario-specific constants are fixed inside library functions |
-| HYDAR-016 | Low | Open | Duplicated constants and formulas; `peak_rel` is unreachable from `track_vessel` |
-| HYDAR-017 | Low | Open | Repository weight and three figure-numbering schemes |
+| HYDAR-011 | Low | Resolved (`01e1c49`) | Sensor noise in `airy` records is 0.14 Pa, not the stated 2 Pa |
+| HYDAR-012 | Low | Resolved (`01e1c49`) | Edge inputs raise unhelpful errors or return the wrong shape |
+| HYDAR-013 | Low | Resolved (`01e1c49`, `01e38bf`, `7050e25`) | Documentation drift (test count, Huber against Cauchy, package description) |
+| HYDAR-014 | Low | Resolved (`df0020f`) | A partial benchmark run overwrites the full CSV; examples write PNGs into the working directory |
+| HYDAR-015 | Low | Resolved (`01e1c49`) | Scenario-specific constants are fixed inside library functions |
+| HYDAR-016 | Low | Partially resolved (`01e1c49`) | Duplicated constants and formulas; `peak_rel` is unreachable from `track_vessel` |
+| HYDAR-017 | Low | Partially resolved (`01e38bf`) | Repository weight and three figure-numbering schemes |
 | HYDAR-018 | Low | Accepted risk | CC BY 4.0 is an unusual licence for software |
+| HYDAR-019 | Medium | Resolved (`01e1c49`, `5a322d6`) | Found during remediation: `wave_direction` overstated the phase speed by 5 to 46 % and, once that was fixed, skipped cycles on a wide array |
+| HYDAR-020 | Medium | Open (tracked in JOURNAL) | Found during remediation: the chirp fit puts the ferry abeam about 31 s late and 4 % too close, which leaves a 0.6° course bias and a 400 m track error |
 
 ## 8. Findings in detail
 
@@ -271,6 +275,18 @@ The optimizer always pushes the middle column and row to the minimum spacing. Th
 
 CC BY 4.0 is the author's choice and matches the Zenodo record. Creative Commons advises against its licences for software, because they do not address source and object code or patents. Recorded here for completeness; no action unless the author wants to revisit it.
 
+### HYDAR-019 (Medium, resolved): `wave_direction` biased the phase speed, then skipped cycles
+
+Found during remediation, by the plane-wave test written for HYDAR-009.
+
+**Evidence**: `wave_direction` took the peak of the raw "full" cross-correlation of each sensor pair. For a narrow-band signal the triangular taper of that estimate pulls every peak towards zero lag, so the delays came out short and the phase speed 5 to 46 % high on synthetic plane waves (the direction was nearly unaffected, because all pairs shrink together). The README phase-speed check of case study 3 was passing partly by accident. Dividing by the overlap removes the bias, but the first 100-seed benchmark then gave kilometre-scale Kelvin errors on the 20 m array: without the taper, long baselines lock one wave period off.
+
+**Fix** (`01e1c49`, `5a322d6`): unbiased correlation, and a two-pass fit. Pass 1 uses the shortest baselines only; pass 2 uses all pairs, each peak taken within half a period of the delay that pass 1 predicts. Two tests cover a plane wave on the Rätsep grid and on the 20 m layout.
+
+### HYDAR-020 (Medium, open): the chirp fit is late and short
+
+Found during remediation of HYDAR-001. With the direction window fixed, the Kelvin method still shows a course bias of about +0.6° and a track error of about 400 m in calm water. On the case study 3 record, `fit_chirp` puts the ferry abeam about 31 s late and 4 % too close (2403 m against 2500 m). A 128 s spectrogram window roughly halves both errors but loses the late part of the wake, so it was not adopted. The cause is probably the time-frequency smearing of the spectrogram ridge where the chirp is steep. Tracked in JOURNAL.md Open threads. Until it is fixed, the Kelvin baseline of the ferry benchmark is fairer than before but not yet the best a Kelvin method can do.
+
 ## 9. Positive observations
 
 - **The benchmark is exactly reproducible.** All seeds are explicit, and 60 rerun rows match the committed CSV in every digit.
@@ -309,6 +325,7 @@ CC BY 4.0 is the author's choice and matches the Zenodo record. Creative Commons
 | Date | Commit | Reviewer | Critical | High | Medium | Low | Notes |
 |---|---|---|---|---|---|---|---|
 | 2026-11-14 | `8d45565` | Claude (repository-review skill) | 0 | 2 | 7 | 9 | First review |
+| 2026-11-14 | `7050e25` | Claude (remediation) | 0 | 0 | 2 | 3 | Open counts after remediation: HYDAR-006 and 020 (Medium); 010, 016 and 017 (Low, the last two partially resolved); 018 accepted risk. Two findings added (019, 020). Not an independent re-review |
 
 ## 14. Status conventions
 
@@ -316,4 +333,22 @@ CC BY 4.0 is the author's choice and matches the Zenodo record. Creative Commons
 
 ## 15. Source changes made
 
-None. A remediation series is a separate step, on request.
+The review itself (`5e5b4b6`) changed no source. The remediation followed on request, on the same branch:
+
+| Commit | Content | Findings |
+|---|---|---|
+| `01e1c49` | Kelvin baseline retuned (direction window before the cusp, ridge interpolation, unbiased correlation); library guards and clear errors; sensor noise after the pressure model; shared constants and formulas; new tests | 001, 004, 005, 007, 009, 011, 012, 013, 015, 016, 019 |
+| `df0020f` | Benchmark runs under any start method, 100 seeds, failure reasons, paired statistics, partial runs to a separate file; GitHub Actions | 002, 003, 004, 008, 014 |
+| `01e38bf` | README and CHANGELOG for case study 3 and the design paragraph; figure numbering documented | 005, 013, 017 |
+| `c8bd89d` | CI installs Python through uv | 008 |
+| `5a322d6` | Two-pass direction fit | 001, 019 |
+| `7050e25` | New 100-seed benchmark data, README tables and conclusions, Figure 7, CHANGELOG | 001, 003, 013 |
+
+Resolution notes:
+
+- **HYDAR-001**: the window artefact is gone (calm-water course bias +2.03° to about +0.6°, track error 538 m to about 400 m). The README no longer says "on every measure" without the remaining cause, which is HYDAR-020.
+- **HYDAR-003**: the README now reports paired seed-by-seed comparisons over 100 seeds and states where a geometry does not help.
+- **HYDAR-005**: not a code defect. The docstring and README now say the same-footprint design is set by `min_spacing`, with the bound for three spacings.
+- **HYDAR-016**: `G`, the depth attenuation and the wind sea are now defined once, and `track_vessel` passes `peak_rel`. Still open: `KelvinShip.wake` hard-codes ρ = 1000 in its amplitude normalization.
+- **HYDAR-017**: the three figure numbers are mapped in the `docs/make_figures.py` docstring. Repository weight (32 MB of figures in history) is unchanged; moving to Git LFS or release assets is the author's decision.
+- **HYDAR-006, HYDAR-010, HYDAR-020** remain open and are tracked in JOURNAL.md. **HYDAR-018** stays an accepted risk.

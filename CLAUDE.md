@@ -8,8 +8,9 @@ ships from their wakes (case studies 2 to 4). See README.md for the science and 
 Project state and decisions live in JOURNAL.md; do not duplicate them into agent-side memory or Claude
 Project memory. When compacting, preserve decisions made and alternatives rejected — they feed JOURNAL.md.
 
-**Current focus**: v1.1.0 (case study 4, correlative interferometry) prepared; waiting on Jeff's GitHub
-release and its Zenodo DOI.
+**Current focus**: v1.1.0 (case study 4, correlative interferometry) prepared; the repository review of
+2026-11-14 and its remediation are in PR #4, waiting on Jeff's review. Then Jeff's GitHub release and its
+Zenodo DOI.
 
 ## Rules
 

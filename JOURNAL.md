@@ -11,17 +11,54 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
   releases or tags); Zenodo then mints a new version DOI. Add it to README "How to cite", CITATION.cff
   (`doi`, `identifiers`, `url`) and the bibtex block. v1.0.0 DOI is 10.5281/zenodo.23881055.
 - **Boat case: interferometry loses course precision in moderate wind** (case study 4, Hs 0.05 m: course
-  SD 0.8 to 1.3 deg vs 0.23 deg for `track_boat`). Only ~60 coherent observations from 6 s windows.
+  SD 0.9 to 1.1 deg vs 0.21 deg for `track_boat`, 100 seeds). Only ~60 coherent observations from 6 s windows.
   Untried ideas: multi-taper cross-spectra, fusing interferometry bearings with cusp-line picks, longer
   records. Start at `hydar/interferometry.py` (`ci_scan`, `fit_track`) and `examples/07_benchmark_interferometry.py`.
 - **Ferry wake synthesis vs depth.** `hydar/kelvin.py` synthesizes a deep-water wake but sensors sit in
   3 m water (Airy filter with h = 3 m). Case study 4 therefore uses deep-water dispersion for the ferry.
   A finite-depth wake would need its own synthesis.
-- **Repository review 2026-11-14: 18 findings open** (`repository_review/2026-11-14-comprehensive-repository-review.md`,
-  IDs HYDAR-001 to HYDAR-018). Start with HYDAR-002 (benchmark script needs the `fork` start method) and
-  HYDAR-001 (the Kelvin baseline's 2 deg course bias comes from its direction window in `locate_vessel`).
+- **Chirp fit of the Kelvin method is late and short (HYDAR-020).** `fit_chirp` puts the ferry abeam about
+  31 s late and 4 % too close; this leaves the Kelvin baseline with a +0.6 deg course bias and a 400 m track
+  error, so the ferry factor of 2 to 6 in case study 4 is against a baseline that can still improve. A 128 s
+  spectrogram window halves the error but loses the late wake. Start at `hydar/kelvin.py` (`ridge_points`,
+  `fit_chirp`).
+- **Repository review 2026-11-14: remaining items** (`repository_review/2026-11-14-comprehensive-repository-review.md`).
+  Open: HYDAR-006 (ferry depth, above), 010 (Zenodo DOI, above), 020 (chirp fit, above); partially resolved:
+  016 (`KelvinShip.wake` hard-codes rho = 1000), 017 (32 MB of figures in git history; LFS or release assets
+  is Jeff's decision). PR #4 holds the review and the remediation.
+- **v1.1.0 changed after it was prepared.** The remediation changed library behaviour and the case study 3
+  and 4 numbers under the 1.1.0 heading; CHANGELOG and CITATION still carry 2026-11-09. Jeff decides whether
+  to release this as v1.1.0 (with a new date) or as v1.1.1 or v1.2.0.
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
+
+## 2026-11-14 — Review remediated: with a fair Kelvin baseline the ferry advantage is a factor of 2 to 6, not 3 to 9
+
+**Decided** (Jeff: "Go ahead and update the repo based on the review"; PR #4):
+- `locate_vessel` measures the cusp-wave direction in the 30 s before the cusp; `ridge_points` interpolates
+  peaks; `wave_direction` uses the unbiased correlation and a two-pass fit (short baselines, then all pairs
+  within half a period of the predicted delay).
+- Benchmark: 100 seeds, any start method, `reason` column, paired seed-by-seed statistics, 2 Pa sensor noise
+  added after the pressure model (`SensorArray(noise_pa=...)`).
+- CI on GitHub Actions: Python 3.9 with the oldest supported numpy, scipy, matplotlib, and Python 3.13.
+- 16 of the 18 findings resolved or partially resolved; two findings added (HYDAR-019 resolved, HYDAR-020 open).
+**Confirmed by**: 41 tests pass (36 fast, 5 slow); full benchmark, 2700 records, no run ended in an
+unexpected error. Ferry, Rätsep grid, median track error Kelvin against interferometry: 402 against 68 m
+(calm), 397 against 131 m (Hs 0.3 m), 457 against 235 m (Hs 0.6 m); Kelvin course bias +0.68 deg (was +2.03).
+Optimal 20 m array better than the Rätsep grid in 242 of 400 paired runs with wind (p < 0.001). Optimal
+same-footprint array: 211 of 400 (p = 0.29), so no benefit in wind. Boat: optimal grid worse in calm water,
+better at Hs 0.025 m (67 of 100), not significant at 0.05 and 0.1 m.
+**Rejected**:
+- Keeping the tapered ("biased") cross-correlation in `wave_direction`: it hid cycle skipping on wide arrays
+  but overstated the phase speed by 5 to 46 % on plane waves.
+- A 128 s spectrogram window for the chirp fit: halves the abeam-time error, loses the late wake.
+- Rejecting every record whose analysis window touches the record edge: broke `test_locate_passing_ferry`;
+  the guard now needs half of the window inside the record.
+- `actions/setup-python` for Python 3.9: not available on the current runner image; CI uses uv instead.
+**Found during the work**: the first 100-seed run gave kilometre-scale Kelvin errors on the 20 m array
+(cycle skipping after the taper was removed); fixed by the two-pass fit and rerun. The full benchmark takes
+about 30 minutes on 4 cores.
+**Open**: see Open threads (chirp fit, release version).
 
 ## 2026-11-14 — Whole-repository review: results reproduce; the ferry comparison uses an untuned Kelvin baseline
 
