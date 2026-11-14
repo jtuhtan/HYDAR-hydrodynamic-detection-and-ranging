@@ -7,7 +7,7 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 
 ## Open threads
 
-- **Zenodo DOI for v1.1.0.** Jeff publishes the GitHub release v1.1.0 (Claude sessions cannot create
+- **Zenodo DOI for v1.2.0.** Jeff publishes the GitHub release v1.2.0 (Claude sessions cannot create
   releases or tags); Zenodo then mints a new version DOI. Add it to README "How to cite", CITATION.cff
   (`doi`, `identifiers`, `url`) and the bibtex block. v1.0.0 DOI is 10.5281/zenodo.23881055.
 - **Boat case: interferometry loses course precision in moderate wind** (case study 4, Hs 0.05 m: course
@@ -26,11 +26,18 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
   Open: HYDAR-006 (ferry depth, above), 010 (Zenodo DOI, above), 020 (chirp fit, above); partially resolved:
   016 (`KelvinShip.wake` hard-codes rho = 1000), 017 (32 MB of figures in git history; LFS or release assets
   is Jeff's decision). PR #4 holds the review and the remediation.
-- **v1.1.0 changed after it was prepared.** The remediation changed library behaviour and the case study 3
-  and 4 numbers under the 1.1.0 heading; CHANGELOG and CITATION still carry 2026-11-09. Jeff decides whether
-  to release this as v1.1.0 (with a new date) or as v1.1.1 or v1.2.0.
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
+
+## 2026-11-14 — Version is 1.2.0; v1.1.0 was never released on its own
+
+**Decided** (Jeff: "update the version as well to reflect the changes"): 1.2.0 in `pyproject.toml`,
+`hydar/__init__.py` and CITATION.cff (date 2026-11-14). CHANGELOG has a v1.2.0 section with the review
+changes and the new results; the v1.1.0 section keeps what was added on 2026-11-09 and is marked as not
+released on its own. CITATION and README keep the v1.0.0 DOI until Zenodo archives v1.2.0.
+**Rejected**: keeping 1.1.0 with a new date (the changed numbers and behaviour would hide under a version
+that was already announced in the journal and in PR #3); 1.1.1 (new arguments and changed defaults are more
+than a patch).
 
 ## 2026-11-14 — Review remediated: with a fair Kelvin baseline the ferry advantage is a factor of 2 to 6, not 3 to 9
 

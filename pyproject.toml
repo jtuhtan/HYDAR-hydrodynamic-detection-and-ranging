@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hydar"
-version = "1.1.0"
+version = "1.2.0"
 description = "HYDAR: Hydrodynamic Detection and Ranging. Locate objects in water (drops, boats, ships) from the surface waves they make, using pressure-sensor arrays."
 readme = "README.md"
 authors = [{ name = "Jeff Tuhtan" }]

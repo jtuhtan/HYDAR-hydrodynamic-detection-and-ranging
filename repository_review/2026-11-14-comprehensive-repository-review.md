@@ -351,4 +351,5 @@ Resolution notes:
 - **HYDAR-005**: not a code defect. The docstring and README now say the same-footprint design is set by `min_spacing`, with the bound for three spacings.
 - **HYDAR-016**: `G`, the depth attenuation and the wind sea are now defined once, and `track_vessel` passes `peak_rel`. Still open: `KelvinShip.wake` hard-codes ρ = 1000 in its amplitude normalization.
 - **HYDAR-017**: the three figure numbers are mapped in the `docs/make_figures.py` docstring. Repository weight (32 MB of figures in history) is unchanged; moving to Git LFS or release assets is the author's decision.
+- **HYDAR-010**: the version is now 1.2.0 (date 2026-11-14) at the author's request; the DOI still belongs to v1.0.0 until the release is archived.
 - **HYDAR-006, HYDAR-010, HYDAR-020** remain open and are tracked in JOURNAL.md. **HYDAR-018** stays an accepted risk.

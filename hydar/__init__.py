@@ -23,4 +23,4 @@ __all__ = [
     "Boat", "BoatTrack", "track_boat", "wake_arrival", "pick_wake", "KELVIN_HALF_ANGLE",
     "SpectralSolver",
 ]
-__version__ = "1.1.0"
+__version__ = "1.2.0"
