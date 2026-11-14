@@ -29,7 +29,7 @@ cd HYDAR-hydrodynamic-detection-and-ranging
 pip install -e ".[test]"
 
 python examples/03_hydar_localization.py   # full pipeline, about 40 s
-pytest                                     # 22 tests, about 4 minutes
+pytest -m "not slow"                       # 35 fast tests, about 2 minutes (all 40 with plain pytest: about 5)
 ```
 
 ```python
@@ -149,17 +149,17 @@ In the example, a ferry sails at 11 m/s (21 kn) on a course of 159°, 2.5 km fro
 
 1. **Detection.** Averaging the spectrograms of five sensors (four corners and the centre) suppresses incoherent noise ([2020](https://doi.org/10.1175/JTECH-D-19-0192.1)). The wake is flagged where its band power rises above the background.
 2. **Speed, distance and time abeam from the spectrogram.** A fixed observer a distance d from the track sees two branches: transverse waves whose frequency falls towards f_t = g/(2πU), and divergent waves whose frequency rises. Both start at the cusp, at √(3/2)·f_t. Fitting the two stationary-phase branches to the spectrogram ridge gives U, d and the time the ship passed abeam. The upper divergent branch is hidden under the wind sea, as noted in the papers, so the fit uses the band below it.
-3. **Wake direction from time delays.** Cross-correlating all 36 sensor pairs gives the delay of the same waves between sensors. A plane-wave fit to those delays gives the direction the cusp waves travel ([2021](https://doi.org/10.1016/j.oceaneng.2021.109156)).
+3. **Wake direction from time delays.** Cross-correlating all 36 sensor pairs gives the delay of the same waves between sensors. A plane-wave fit to those delays gives the direction the cusp waves travel ([2021](https://doi.org/10.1016/j.oceaneng.2021.109156)). The delays are measured in the 30 s before the fitted cusp time. Ahead of the cusp line only the cusp wave is present; behind it the transverse and divergent branches overlap and their mean direction drifts, which would bias the course by about 1.5°.
 4. **Course and position.** At the cusp, the waves travel at 35°16′ to the ship's course, so each wave direction fits two candidate courses. In the field, the coastline resolved this ambiguity. Here, the late transverse waves travel along the course, and their direction selects the correct candidate. The distance d and the side of the track the waves came from then place the ship.
 
 | | True | HYDAR (case study 3) |
 |---|---|---|
 | Speed | 11.00 m/s | 10.99 m/s |
-| Distance from track | 2500 m | 2390 m |
-| Course | −69.0° (159° nautical) | −67.1° |
-| Ship position when the cusp reaches the array | | 463 m off |
+| Distance from track | 2500 m | 2403 m |
+| Course | −69.0° (159° nautical) | −68.3° |
+| Ship position when the cusp reaches the array | | 365 m off |
 
-For comparison, the field study reported positions mostly within 0.5 km of the AIS positions, with about 400 m in its example case.
+For comparison, the field study reported positions mostly within 0.5 km of the AIS positions, with about 400 m in its example case. Most of the remaining error lies along the track: the chirp fit places the ship abeam 31 s late and 4 % too close, two errors that nearly cancel in the cusp time but not in the position.
 
 ```python
 from hydar import SensorArray
@@ -175,7 +175,7 @@ fix = locate_vessel(array)       # speed, distance, course, ship position at any
 
 **Figure 6.** Case study 3, after Rätsep et al. (2020, 2021). **a**, dynamic pressure at the centre sensor: wind-sea noise, then the ferry wake 15 min after the ship passed abeam. **b**, spectrogram averaged over five sensors. The fitted Kelvin branches (red) follow the ridge points (cyan); the upper divergent branch disappears under the wind sea. **c**, the true track (black) and the HYDAR track (dashed red) from the single 3 × 3 array (blue). The arrow shows the measured direction of the cusp waves; the markers show the ship when the cusp reached the array, true (circle) and estimated (cross).
 
-**Assumptions.** The model assumes deep water along the whole wave path, so it ignores refraction and shoaling as the waves enter the 3 m deep nearshore. It also represents the hull by a smooth amplitude spectrum rather than a specific ship. The spectrogram relations used here are derived in `hydar/kelvin.py` from stationary phase; the papers state the same physics in terms of the cusp and limiting transverse frequencies.
+**Assumptions.** The model assumes deep water along the whole wave path, so it ignores refraction and shoaling as the waves enter the 3 m deep nearshore. It also represents the hull by a smooth amplitude spectrum rather than a specific ship. The spectrogram relations used here are derived in `hydar/kelvin.py` from stationary phase; the papers state the same physics in terms of the cusp and limiting transverse frequencies. The speed from the phase velocity of the cusp waves (`speed_from_phase`) is only a rough check, within about 15 %.
 
 ## Case study 4: array design and ship tracking by correlative interferometry
 
@@ -192,7 +192,7 @@ The Kelvin angle, the cusp and the chirp all follow from these two equations in 
 2. **Detection.** A (time, frequency) cell becomes an observation when ρ ≥ 0.9 (a coherent wave crosses the array) and its power is at least 3 times the median of that frequency over the record (something transient has arrived). A stationary wind sea sits at the median and fails the second test.
 3. **Tracking.** Every observation, from any number of arrays, gives one linear equation for **V** (stationarity) and, once **V** is known, one for **P**₀ (rays). A RANSAC search finds the velocity and start position that most observations agree with. The ray equation rejects wind waves, because the same wind-wave direction seen in many windows cannot come from one point on a moving source. A robust least-squares fit (Cauchy loss) then refines **P**₀ and **V**. The result is a constant-velocity track, like those of case studies 2 and 3.
 
-**Array design.** For a plane wave of wavenumber k, the Cramér-Rao bound on the bearing is var(θ) ≥ 1 / (2 SNR k² Σᵢ ((**r**ᵢ − **r̄**) · **t**_θ)²), with **t**_θ normal to the wave direction. A wider aperture therefore measures the bearing better. But once the spacing exceeds half a wavelength, a regular grid **aliases**: its correlation pattern grows grating lobes as high as the true peak, and in noise the wrong lobe can win. `design_array` searches 3 × 3 grids whose middle column and middle row may sit anywhere between the outer ones, so the grid can be non-uniform and rectangular. It minimizes the mean bearing bound over the frequency band and all directions, subject to a highest sidelobe of 0.6, a maximum footprint and a minimum spacing, using differential evolution.
+**Array design.** For a plane wave of wavenumber k, the Cramér-Rao bound on the bearing is var(θ) ≥ 1 / (2 SNR k² Σᵢ ((**r**ᵢ − **r̄**) · **t**_θ)²), with **t**_θ normal to the wave direction. A wider aperture therefore measures the bearing better. But once the spacing exceeds half a wavelength, a regular grid **aliases**: its correlation pattern grows grating lobes as high as the true peak, and in noise the wrong lobe can win. `design_array` searches 3 × 3 grids whose middle column and middle row may sit anywhere between the outer ones, so the grid can be non-uniform and rectangular. It minimizes the mean bearing bound over the frequency band and all directions, subject to a highest sidelobe of 0.6, a maximum footprint and a minimum spacing (0.5 m for the ferry designs, 0.25 m for the boat design), using differential evolution.
 
 | Case (band) | Geometry | Sensor columns, rows (m) | Footprint | Peak sidelobe | Bearing bound |
 |---|---|---|---|---|---|
@@ -202,7 +202,7 @@ The Kelvin angle, the cusp and the chirp all follow from these two equations in 
 | Boat (0.45 to 1.2 Hz, 3 m depth) | 1 m grid of case study 2 | 1 m spacing | 2.8 m | 1.00 (aliased above 0.9 Hz) | 1 |
 | | Optimal, same footprint | gaps 1.56 and 0.46; 0.45 and 1.53 | 2.8 m | 0.60 | 0.95 |
 
-Within the same footprint, the best grid puts the middle column and row close to one edge. This adds aperture where it counts but only lowers the bound by 5 to 9 %. The 1 m grid of case study 2 aliases at the short end of the boat's wake band, and the optimal grid removes that ambiguity. In the ferry case, the waves are 20 to 250 m long, so a wider footprint helps most: 20 m cuts the bearing bound to a third.
+Within the same footprint, the best grid puts the middle column and row as close to one edge as the minimum spacing allows. The design is therefore set by that constraint rather than by a trade-off: for the ferry band, a minimum spacing of 0.25, 0.5 or 1 m gives a bound of 0.89, 0.91 or 0.94 times that of the regular grid. The minimum spacing should come from the hardware or from the coherence length of the noise. The gain is small either way, 5 to 9 % here. The 1 m grid of case study 2 aliases at the short end of the boat's wake band, and the optimal grid removes that ambiguity. In the ferry case, the waves are 20 to 250 m long, so a wider footprint helps most: 20 m cuts the bearing bound to a third.
 
 ```python
 from hydar import SensorArray
@@ -321,6 +321,8 @@ $$
 * `pressure_model="airy"`: linear (Airy) wave theory attenuates each frequency component with depth, $K_p=\cosh k(h+z)/\cosh kh$ with $\omega^2 = gk\tanh kh$. This model shows how strongly a deep array filters short waves. Because the filter is zero-phase, it smears sharp fronts slightly earlier in time, so do not use it for arrival picking.
 * `pressure_model="solver"`: the dispersive `SpectralSolver` supplies the dynamic pressure at the sensor depth directly (section 1b). Case study 2 uses this model.
 
+`noise_pa` adds white sensor noise (standard deviation in Pa) to the dynamic pressure after the pressure model, so the water above the sensor does not filter it. Case studies 3 and 4 use 2 Pa.
+
 ### 5. Boat
 
 `Boat` moves a hull along a straight line at constant speed. In the dispersive `SpectralSolver`, the hull's depth below the waterline, D(x, y, t), acts as the surface pressure head P/(ρg) (section 1b). In the shallow-water `Solver`, its rate of change q = ∂D/∂t enters as the volume source instead. This source pushes water out ahead of the bow and lets it flow back behind the stern. It integrates to zero, and the water raised around the hull equals the displaced volume (tested to within 3 %). In both solvers, the boat can start inside the absorbing layer so that it enters the domain already at speed.
@@ -348,7 +350,7 @@ In example 3, every bearing is within 0.4° of the truth, the single-array range
 
 ## Assumptions and limitations
 
-* **Shallow-water physics (drop case).** The drop examples use the shallow-water `Solver`. Because it is linear and non-dispersive, it is valid only for waves much longer than the depth and for amplitudes much smaller than the depth. Real waves from objects smaller than the water depth are dispersive: longer waves outrun shorter ones, and the front spreads out. The dispersive `SpectralSolver` could also model the drop case, but arrival picking would then have to account for the group velocity.
+* **Shallow-water physics (drop case).** The drop examples use the shallow-water `Solver`. Because it is linear and non-dispersive, it is valid only for waves much longer than the depth and for amplitudes much smaller than the depth. Real waves from objects smaller than the water depth are dispersive: longer waves outrun shorter ones, and the front spreads out. The dispersive `SpectralSolver` is forced by surface pressure only and does not yet take the sphere's volume source, so adding a `DropObject` to it raises an error. Arrival picking would also have to account for the group velocity.
 * **Idealized water.** The depth is uniform and the bottom flat. Case studies 1 and 2 have no current, wind waves or sensor noise; case study 3 adds wind sea and noise.
 * **Sphere motion.** The sphere moves only vertically, and it is a wave source only while it crosses the surface. A fully submerged moving body does not radiate in this model.
 * **Sensors.** All sensors are ideal point gauges.
@@ -372,9 +374,11 @@ hydar/
                 and boat tracking from the Kelvin or Mach wake (pick_wake, track_boat)
   plotting.py   time-series and map plots
 examples/       runnable scripts (01 to 07) and the two animations
-tests/          pytest suite
+tests/          pytest suite (slow end-to-end tests are marked `slow`)
 docs/img/       figures used in this README
 docs/data/      benchmark results (case study 4)
+repository_review/  dated whole-repository reviews with finding IDs and their status
+.github/workflows/  tests on every pull request, on the oldest and newest supported versions
 ```
 
 ## Author and contact

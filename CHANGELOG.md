@@ -23,7 +23,25 @@ Adds case study 4: a method that designs the 3 × 3 array geometry for correlati
 
 ### Changed
 
-- `kelvin.wave_direction` sizes its correlation lag window from the largest sensor separation instead of `spacing`, so it also works for non-uniform layouts. Results for regular grids are unchanged.
+- `kelvin.wave_direction` sizes its correlation lag window from the largest sensor separation instead of `spacing`, so it also works for non-uniform layouts.
+- **Kelvin method of case study 3 retuned** after the repository review of 2026-11-14 (`repository_review/`), so that the benchmark compares against a fair baseline:
+  - `locate_vessel` measures the cusp-wave direction in the 30 s before the cusp (`cusp_window`), not from 10 s before to 30 s after it. Behind the cusp line the two wake branches overlap and bias the course.
+  - `ridge_points` interpolates each spectrogram peak between frequency bins.
+  - `wave_direction` uses the unbiased cross-correlation. The raw correlation pulled the delays of a narrow-band signal towards zero and overstated the phase speed by 5 to 45 %.
+  - Case study 3 now reads: distance 2403 m (was 2390), course 0.7° off (was 1.9°), position 365 m off (was 463 m).
+- Sensor noise is a property of the array (`SensorArray(noise_pa=..., noise_seed=...)`) and is added after the pressure model. Before, `record_passage` added it to the surface elevation, so the depth filter reduced the stated 2 Pa to 0.14 Pa.
+- `wind_sea` takes `f_range`, `depth` and `z`; `wind_sea_head` now calls it. `stacked_spectrogram`, `fit_chirp` and `wave_direction` expose constants that were fixed for the ferry scenario (`sensors`, `d_guesses`, `min_speed`). `track_vessel` passes `peak_rel` on to `observe`.
+- The benchmark (`examples/07_benchmark_interferometry.py`) runs with any multiprocessing start method (it failed on macOS, Windows and Python 3.14), uses 100 seeds instead of 20, records why a run gave no fix (`reason` column), prints paired seed-by-seed comparisons, and writes a partial run to a separate file.
+
+### Fixed
+
+- `SpectralSolver` raises a `TypeError` for a volume source such as `DropObject` instead of ignoring it.
+- Clear errors for inputs that used to fail obscurely: `locate_vessel` with an analysis window outside the record or no spectrogram ridge (`RuntimeError`), a drop outside the grid, parallel bearings in `intersect_bearings` (`ValueError`). `pick_wake` accepts a single record, and `pick_arrivals` returns no picks for an empty time window.
+
+### Tests and CI
+
+- 13 new tests (40 in total), among them the boat path of case study 4, `pick_wake`, `wave_direction`, the wind sea height, the sensor noise level and the benchmark under `spawn` and `forkserver`.
+- GitHub Actions runs the fast tests on every pull request, on Python 3.9 with the oldest supported numpy, scipy and matplotlib and on Python 3.13 with the newest; all tests run weekly.
 
 ## v1.0.0 (2026-11-02)
 
