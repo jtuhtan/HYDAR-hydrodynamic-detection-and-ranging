@@ -17,8 +17,31 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 - **Ferry wake synthesis vs depth.** `hydar/kelvin.py` synthesizes a deep-water wake but sensors sit in
   3 m water (Airy filter with h = 3 m). Case study 4 therefore uses deep-water dispersion for the ferry.
   A finite-depth wake would need its own synthesis.
+- **Repository review 2026-11-14: 18 findings open** (`repository_review/2026-11-14-comprehensive-repository-review.md`,
+  IDs HYDAR-001 to HYDAR-018). Start with HYDAR-002 (benchmark script needs the `fork` start method) and
+  HYDAR-001 (the Kelvin baseline's 2 deg course bias comes from its direction window in `locate_vessel`).
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
+
+## 2026-11-14 — Whole-repository review: results reproduce; the ferry comparison uses an untuned Kelvin baseline
+
+**Decided**: review recorded at commit 8d45565 with no source changes; remediation is a separate step on
+Jeff's request. 0 Critical, 2 High, 7 Medium, 9 Low.
+**Confirmed by**: all 27 tests pass; every README benchmark table value recomputed from
+`docs/data/ci_benchmark.csv`; 60 rerun ferry rows (seeds 0 and 1) bit-identical to the CSV; the three array
+designs reproduce.
+**Found**:
+- `locate_vessel` measures the cusp-wave direction from 10 s before to 30 s after the cusp; in calm water
+  that window gives the +2.03 deg course bias, and a window of 30 s before the cusp gives +0.32 deg. The
+  claim "interferometry wins on every measure" for the ferry is against this untuned baseline (HYDAR-001).
+- `examples/07_benchmark_interferometry.py` shares state with `Pool` workers through a module global, so it
+  raises KeyError under `spawn` and `forkserver` (macOS, Windows, Python 3.14 and later) (HYDAR-002).
+- The 7 Kelvin "no fix" rows are a ValueError from an empty window in `wave_direction`, caught by a blanket
+  `except` (HYDAR-004). Same-footprint designs sit on the `min_spacing` bound (HYDAR-005). The 20 m array's
+  benefit in wind is not significant seed by seed with 20 seeds (HYDAR-003).
+**Rejected**: the suspicion that a wind sea of 80 constant-amplitude components flatters the detectors;
+1000 components gave the same track errors and inlier counts (6 seeds, ferry, Rätsep grid).
+**Open**: all 18 findings (Open threads).
 
 ## 2026-11-09 — Release v1.1.0 prepared; version bumped and changelog notes written
 
