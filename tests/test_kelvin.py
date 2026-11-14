@@ -35,6 +35,23 @@ def test_wave_direction_of_a_plane_wave():
     assert c_est == pytest.approx(c, rel=0.08)
 
 
+def test_wave_direction_on_a_wide_array_does_not_skip_a_cycle():
+    # baselines longer than half a wavelength: the correlation peak is ambiguous by whole
+    # periods unless the short baselines choose the cycle first
+    from hydar.interferometry import grid_layout
+    layout = grid_layout([0.0, 3.2, 14.3], [0.0, 10.9, 14.0])          # about 20 m across
+    f0 = 0.17
+    k = (2 * np.pi * f0) ** 2 / 9.81                                   # wavelength 54 m
+    t = np.arange(0, 120, 0.01)
+    for theta in (-50.0, 20.0, 130.0):
+        a = SensorArray("W", 0.0, 0.0, layout=layout, rotation_deg=22.5)
+        n = np.array([np.cos(np.radians(theta)), np.sin(np.radians(theta))])
+        a.load(t, 0.05 * np.cos(k * (a.positions @ n)[:, None] - 2 * np.pi * f0 * t), depth=3.0)
+        n_est, c_est = wave_direction(a, 40.0, 70.0)
+        assert np.degrees(np.arccos(np.clip(n_est @ n, -1, 1))) < 1.0
+        assert c_est == pytest.approx(2 * np.pi * f0 / k, rel=0.03)
+
+
 def test_analysis_outside_the_record_is_a_clear_error():
     a, _, _ = _plane_wave_array()
     with pytest.raises(RuntimeError, match="too few samples"):

@@ -317,6 +317,14 @@ def wave_direction(array, t0: float, t1: float, band=(0.1, 0.25), min_speed: flo
 
     Band-passes every sensor, cross-correlates all sensor pairs to get
     their time delays (sub-sample peak interpolation), and fits a plane wave.
+
+    The fit runs in two passes, because the correlation of a narrow-band
+    signal repeats every wave period and a long baseline can lock onto the
+    wrong cycle. Pass 1 uses only the short baselines (up to 1.5 times the
+    shortest), whose delays are unambiguous. Pass 2 takes, for every pair,
+    the correlation peak within half a period (of the upper band edge) of the
+    delay that pass 1 predicts, and refits with all pairs.
+
     min_speed [m/s] is the slowest phase speed searched for: the lag window
     is the largest sensor separation divided by it.
     Returns (unit propagation vector, apparent phase speed [m/s]).
@@ -332,23 +340,38 @@ def wave_direction(array, t0: float, t1: float, band=(0.1, 0.25), min_speed: flo
     max_lag = int(array.fs * span / min_speed)   # > largest inter-sensor delay at min_speed
     if x.shape[1] <= 2 * max_lag:
         raise RuntimeError(f"window {t0:.0f} to {t1:.0f} s holds too few samples of the record")
+    # unbiased estimate: divide by the number of overlapping samples. The raw
+    # correlation tapers towards larger lags, which pulls the flat peak of a
+    # narrow-band signal towards zero lag and so overstates the phase speed.
     overlap = x.shape[1] - np.abs(np.arange(-max_lag, max_lag + 1))
-    rows, lags = [], []
+    mid = x.shape[1] - 1
+    rows, segs = [], []
     for i in range(n):
         for j in range(i + 1, n):
             cc = np.correlate(x[j], x[i], mode="full")
-            mid = len(x[i]) - 1
-            # unbiased estimate: divide by the number of overlapping samples. The raw
-            # correlation tapers towards larger lags, which pulls the flat peak of a
-            # narrow-band signal towards zero lag and so overstates the phase speed.
-            seg = cc[mid - max_lag: mid + max_lag + 1] / overlap
-            m = int(np.argmax(seg))
-            if 0 < m < len(seg) - 1:   # parabolic sub-sample refinement
-                y0, y1, y2 = seg[m - 1], seg[m], seg[m + 1]
-                m = m + 0.5 * (y0 - y2) / (y0 - 2 * y1 + y2)
-            lags.append((m - max_lag) / array.fs)
+            segs.append(cc[mid - max_lag: mid + max_lag + 1] / overlap)
             rows.append(array.positions[j] - array.positions[i])
-    s = np.linalg.lstsq(np.array(rows), np.array(lags), rcond=None)[0]   # slowness vector
+    rows = np.array(rows)
+    dist = np.linalg.norm(rows, axis=1)
+
+    def peak(seg, centre, half):
+        """Lag [s] of the highest correlation within `half` samples of `centre`."""
+        lo = int(np.clip(round(centre - half), 0, len(seg) - 1))
+        hi = int(np.clip(round(centre + half), lo, len(seg) - 1))
+        m = lo + int(np.argmax(seg[lo:hi + 1]))
+        if 0 < m < len(seg) - 1:   # parabolic sub-sample refinement
+            y0, y1, y2 = seg[m - 1], seg[m], seg[m + 1]
+            den = y0 - 2 * y1 + y2
+            if den < 0:
+                m = m + 0.5 * (y0 - y2) / den
+        return (m - max_lag) / array.fs
+
+    short = dist <= 1.5 * dist.min()
+    lags = [peak(seg, max_lag, array.fs * d / min_speed) for seg, d in zip(np.array(segs)[short], dist[short])]
+    s = np.linalg.lstsq(rows[short], np.array(lags), rcond=None)[0]      # pass 1: coarse slowness
+    half = 0.5 * array.fs / band[1]
+    lags = [peak(seg, max_lag + array.fs * (r @ s), half) for seg, r in zip(segs, rows)]
+    s = np.linalg.lstsq(rows, np.array(lags), rcond=None)[0]             # pass 2: all pairs
     return s / np.linalg.norm(s), float(1 / np.linalg.norm(s))
 
 
