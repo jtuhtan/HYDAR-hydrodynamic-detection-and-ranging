@@ -10,7 +10,7 @@ Project memory. When compacting, preserve decisions made and alternatives reject
 
 **Current focus**: v1.2.0 (case study 4, correlative interferometry, plus the fixes from the repository
 review of 2026-11-14) is on main; waiting on Jeff's GitHub release v1.2.0 and its Zenodo DOI. Case study 5
-(fish finds a rock from its Kármán vortex street, `hydar/karman.py`) is merged to main (PR #7) under CHANGELOG "Unreleased"; its animation, results figure (Figure 9) and results tables are in review on a follow-up PR.
+(fish finds a rock from its Kármán vortex street, `hydar/karman.py`) is on main (PRs #7 to #9) under CHANGELOG "Unreleased"; its version number is Jeff's call.
 
 ## Rules
 
