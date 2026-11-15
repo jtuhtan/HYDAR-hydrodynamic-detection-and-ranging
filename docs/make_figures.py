@@ -14,7 +14,7 @@ numbers differ because the map at the top of the README has no number:
     4   fig05_series60_hull, fig06_boat_tracking    Figures 4 and 5
     5   fig07_vessel_localization                   Figure 6
     6   fig08_interferometry                        Figure 7
-    7   fig09_fish_rock                             Figure 8
+    7   fig09_fish_rock, fig10_fish_rock_results    Figures 8 and 9
 """
 
 import sys
@@ -540,7 +540,6 @@ def fig_interferometry():
 
 # ------------------------------------------------------------------ fig 9
 def fig_fish_rock():
-    import csv
     from hydar.karman import (Fish, HemisphereRock, KarmanStreet, RiverTurbulence, TrapezoidalChannel,
                               lateral_survey, locate_rock)
     ch = TrapezoidalChannel()
@@ -551,21 +550,18 @@ def fig_fish_rock():
     turb = RiverTurbulence(st.U, intensity=0.10, scale=ch.depth, seed=1)
     sv = lateral_survey(st, 6.0 - L / 3, stations, turbulence=turb, seed=1)
     fix = locate_rock(sv)
-    rows = list(csv.DictReader(open(ROOT / "docs" / "data" / "fish_rock_benchmark.csv")))
 
     # manual layout: the equal-aspect panels collapse matplotlib's constrained layout
-    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 172 * pf.MM))
+    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 132 * pf.MM))
     fig.set_layout_engine("none")
-    gs = fig.add_gridspec(4, 6, height_ratios=[1.05, 0.6, 0.9, 0.95], left=0.09, right=0.95,
-                          bottom=0.06, top=0.97, hspace=0.62, wspace=1.6)
+    gs = fig.add_gridspec(3, 6, height_ratios=[1.05, 0.6, 0.9], left=0.09, right=0.95,
+                          bottom=0.08, top=0.96, hspace=0.62, wspace=1.6)
     a = fig.add_subplot(gs[0, :])
     b = fig.add_subplot(gs[1, :3])
     c = fig.add_subplot(gs[1, 3:])
     d = fig.add_subplot(gs[2, :2])
     e = fig.add_subplot(gs[2, 2:4])
     f = fig.add_subplot(gs[2, 4:])
-    g = fig.add_subplot(gs[3, :3])
-    h = fig.add_subplot(gs[3, 3:])
 
     # a: plan view with a snapshot of the street's pressure
     W = ch.top_width
@@ -657,49 +653,106 @@ def fig_fish_rock():
     f.plot(fix.y, fix.distance, "+", color=C["red"], ms=7, mew=1.3)
     f.set(xlabel="Rock y (m)", ylabel="Distance (m)", xlim=(-1.8, 1.8), ylim=(1, 20), xticks=[-1, 0, 1])
 
-    # g: benchmark, distance error against distance and turbulence
-    dist = sorted({float(r["distance_m"]) for r in rows if r["case"] == "distance"})
-    for ti, col, mk in ((0.0, C["dark"], "o"), (0.05, C["blue"], "s"), (0.10, C["red"], "^"),
-                        (0.15, C["orange"], "D")):
-        med, lo, hi = [], [], []
-        for dd in dist:
-            v = [abs(float(r["err_distance"])) for r in rows if r["case"] == "distance"
-                 and float(r["distance_m"]) == dd and float(r["turbulence"]) == ti and r["detected"] == "1"]
-            n_all = sum(1 for r in rows if r["case"] == "distance" and float(r["distance_m"]) == dd
-                        and float(r["turbulence"]) == ti)
-            if len(v) < 0.5 * n_all:
-                med.append(np.nan), lo.append(np.nan), hi.append(np.nan)
-                continue
-            med.append(np.median(v)), lo.append(np.percentile(v, 25)), hi.append(np.percentile(v, 75))
-        g.plot(dist, med, "-" + mk, color=col, lw=1.0, ms=3, label=f"Tu {100 * ti:.0f} %")
-        g.fill_between(dist, lo, hi, color=col, alpha=0.12, lw=0)
-    g.set(xlabel="Distance behind the rock (m)", ylabel="|Distance error| (m)", xticks=dist, yscale="log",
-          ylim=(0.01, 20))
-    g.grid(True)
-    pf.legend(g, loc="upper left", fontsize=6, ncol=2)
-
-    # h: benchmark, wrong wake model
-    names = ["nominal", "St 0.17", "St 0.23", "kappa 0.80", "kappa 0.95", "nu_t x0.5", "nu_t x2",
-             "Manning n 0.025", "Manning n 0.050"]
-    labels = ["Model right", "St 0.17", "St 0.23", "κ 0.80", "κ 0.95", "ν$_t$ × 0.5", "ν$_t$ × 2",
-              "n 0.025", "n 0.050"]
-    mean, sd = [], []
-    for nm in names:
-        v = [float(r["err_distance"]) for r in rows if r["case"] == "mismatch" and r["variant"] == nm
-             and r["detected"] == "1"]
-        mean.append(np.median(v) if v else np.nan)
-        sd.append([np.median(v) - np.percentile(v, 25), np.percentile(v, 75) - np.median(v)] if v else [0, 0])
-    yy = np.arange(len(names))[::-1]
-    h.barh(yy, mean, xerr=np.array(sd).T, color=[C["dark"]] + [C["grey"]] * (len(names) - 1), height=0.6,
-           error_kw=dict(lw=0.6, capsize=1.5))
-    h.axvline(0, color=C["ink"], lw=0.6)
-    h.set(yticks=yy, xlabel="Distance error (m), true wake ≠ fish's model")
-    h.set_yticklabels(labels, fontsize=6.5)
-    h.grid(True, axis="x")
-
-    pf.panel_labels([a, b, c, d, e, f, g, h])
+    pf.panel_labels([a, b, c, d, e, f])
     pf.save(fig, "fig09_fish_rock", outdir=OUT)
     return fix
+
+
+# ------------------------------------------------------------------ fig 10
+FISH_VARIANTS = [("nominal", "Model right"), ("St 0.17", "St 0.17"), ("St 0.23", "St 0.23"),
+                 ("kappa 0.80", "U$_c$/U 0.80"), ("kappa 0.95", "U$_c$/U 0.95"),
+                 ("nu_t x0.5", "ν$_t$ × 0.5"), ("nu_t x2", "ν$_t$ × 2"),
+                 ("Manning n 0.025", "n 0.025"), ("Manning n 0.050", "n 0.050")]
+
+
+def fig_fish_rock_results():
+    """Case study 5 benchmark: errors against distance and turbulence, and under a wrong wake model."""
+    import csv
+    rows = list(csv.DictReader(open(ROOT / "docs" / "data" / "fish_rock_benchmark.csv")))
+    dist = sorted({float(r["distance_m"]) for r in rows if r["case"] == "distance"})
+    turb = sorted({float(r["turbulence"]) for r in rows if r["case"] == "distance"})
+
+    def sel(d, ti):
+        return [r for r in rows if r["case"] == "distance" and float(r["distance_m"]) == d
+                and float(r["turbulence"]) == ti]
+
+    def det(rs):
+        return [r for r in rs if r["detected"] == "1"]
+
+    fig = plt.figure(figsize=(pf.width_mm("full") * pf.MM, 160 * pf.MM))
+    fig.set_layout_engine("none")
+    gs = fig.add_gridspec(3, 12, height_ratios=[1, 1, 1.15], left=0.1, right=0.98, bottom=0.07, top=0.96,
+                          hspace=0.55, wspace=4.6)
+    top = gs[0:2, :].subgridspec(2, 2, hspace=0.55, wspace=0.32)
+    a = fig.add_subplot(top[0, 0])
+    b = fig.add_subplot(top[0, 1])
+    c = fig.add_subplot(top[1, 0])
+    d = fig.add_subplot(top[1, 1])
+    e = fig.add_subplot(gs[2, 0:4])
+    f = fig.add_subplot(gs[2, 4:8], sharey=e)
+    g = fig.add_subplot(gs[2, 8:12], sharey=e)
+
+    styles = list(zip(turb, [C["dark"], C["blue"], C["red"], C["orange"]], pf.MARKERS))
+    for ti, col, mk in styles:
+        lat, rng, dd_, rate = [], [], [], []
+        for dd in dist:
+            rs = sel(dd, ti)
+            ok = det(rs)
+            rate.append(100 * len(ok) / len(rs))
+            if len(ok) < 0.5 * len(rs):
+                lat.append((np.nan,) * 3), rng.append((np.nan,) * 3), dd_.append((np.nan,) * 2)
+                continue
+            ey = np.abs([float(r["err_y"]) for r in ok]) * 100
+            ed = np.abs([float(r["err_distance"]) for r in ok])
+            eD = np.array([float(r["D_est"]) / float(r["D_true"]) - 1 for r in ok]) * 100
+            lat.append((np.median(ey), np.percentile(ey, 25), np.percentile(ey, 75)))
+            rng.append((np.median(ed), np.percentile(ed, 25), np.percentile(ed, 75)))
+            dd_.append((np.mean(eD), np.std(eD)))
+        lat, rng, dd_ = np.array(lat), np.array(rng), np.array(dd_)
+        lab = f"Tu {100 * ti:.0f} %"
+        for ax, v in ((a, lat), (b, rng)):
+            ax.plot(dist, v[:, 0], "-" + mk, color=col, lw=1.0, ms=3, label=lab)
+            ax.fill_between(dist, v[:, 1], v[:, 2], color=col, alpha=0.12, lw=0)
+        c.errorbar(np.array(dist) + 0.15 * (ti / 0.05 - 1.5), dd_[:, 0], yerr=dd_[:, 1], fmt="-" + mk,
+                   color=col, lw=1.0, ms=3, elinewidth=0.6, capsize=1.5, label=lab)
+        d.plot(dist, rate, "-" + mk, color=col, lw=1.0, ms=3, label=lab)
+    a.set(ylabel="|Lateral error| (cm)", yscale="log", ylim=(0.1, 200))
+    b.set(ylabel="|Distance error| (m)", yscale="log", ylim=(0.01, 20))
+    c.set(ylabel="Error of D (%)", ylim=(-10, 40))
+    c.annotate("+95 %", xy=(12.0 + 0.15 * 1.5, 40), xytext=(10.6, 36), fontsize=7, color=C["orange"],
+               va="center", arrowprops=dict(arrowstyle="->", lw=0.6, color=C["orange"]))
+    c.axhline(0, color=C["ink"], lw=0.6)
+    d.set(ylabel="Street detected (%)", ylim=(0, 108), yticks=[0, 50, 100])
+    for ax in (a, b, c, d):
+        ax.set(xlabel="Distance (m)", xticks=dist, xlim=(2, 13))
+        ax.grid(True)
+    pf.legend(d, loc="lower left", fontsize=7)
+
+    # wrong wake model, 6 m, Tu 10 %
+    yy = np.arange(len(FISH_VARIANTS))[::-1]
+    for ax, key, scale, xl in ((e, "err_y", 100, "Lateral error (cm)"), (f, "err_distance", 1, "Distance error (m)"),
+                               (g, "D", 100, "Error of D (%)")):
+        med, lo, hi = [], [], []
+        for v, _ in FISH_VARIANTS:
+            ok = det([r for r in rows if r["case"] == "mismatch" and r["variant"] == v])
+            if key == "D":
+                x = np.array([float(r["D_est"]) / float(r["D_true"]) - 1 for r in ok]) * scale
+            else:
+                x = np.array([float(r[key]) for r in ok]) * scale
+            med.append(np.median(x)), lo.append(np.percentile(x, 25)), hi.append(np.percentile(x, 75))
+        med, lo, hi = map(np.array, (med, lo, hi))
+        cols = [C["dark"]] + [C["grey"]] * (len(yy) - 1)
+        ax.barh(yy, med, color=cols, height=0.6, xerr=[med - lo, hi - med], error_kw=dict(lw=0.6, capsize=1.5))
+        ax.axvline(0, color=C["ink"], lw=0.6)
+        ax.set(xlabel=xl)
+        ax.grid(True, axis="x")
+    e.set(yticks=yy)
+    e.set_yticklabels([lab for _, lab in FISH_VARIANTS], fontsize=7)
+    e.set_xlim(-12, 12)
+    f.tick_params(labelleft=False)
+    g.tick_params(labelleft=False)
+    pf.panel_labels([a, b, c, d, e, f, g])
+    pf.save(fig, "fig10_fish_rock_results", outdir=OUT)
 
 
 if __name__ == "__main__":
@@ -722,3 +775,4 @@ if __name__ == "__main__":
         print(*fig_interferometry(), sep="\n")
     if "7" in which:
         print(fig_fish_rock())
+        fig_fish_rock_results()

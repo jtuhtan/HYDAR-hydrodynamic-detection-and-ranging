@@ -72,7 +72,8 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 | `examples/06_array_design.py` | Case study 4: designs the optimal 3 × 3 array for correlative interferometry, then tracks the case study 3 ferry with it, without Kelvin wake theory, and compares with the Kelvin method (about 2 minutes). |
 | `examples/07_benchmark_interferometry.py` | Case study 4 benchmark: Monte Carlo comparison of interferometry and the Kelvin methods of case studies 2 and 3 for accuracy, precision and wind noise (about 30 minutes on 4 cores). Writes `docs/data/ci_benchmark.csv`. |
 | `examples/08_fish_rock.py` | Case study 5: a 25 cm fish with 10 lateral-line pressure sensors finds a rock in a trapezoidal river from the rock's Kármán vortex street (about 10 s). |
-| `examples/09_benchmark_fish_rock.py` | Case study 5 benchmark: 625 Monte Carlo surveys over distance, river turbulence and a wake model that differs from the fish's (about 30 minutes on 4 cores). Writes `docs/data/fish_rock_benchmark.csv`. |
+| `examples/09_benchmark_fish_rock.py` | Case study 5 benchmark: 625 Monte Carlo surveys over distance, river turbulence and a wake model that differs from the fish's (about 30 minutes on 4 cores). Writes `docs/data/fish_rock_benchmark.csv` and the results tables `docs/data/fish_rock_summary.md` (`--summary` rebuilds the tables from the CSV). |
+| `examples/make_fish_animation.py` | Renders the case study 5 animation from a real survey (Tu = 10 %, rock 0.4 m off the centreline, fish 6 m behind it; needs ffmpeg, about 15 minutes). The inset builds the amplitude profile across the river station by station; the red laser ends at the HYDAR fix. |
 | `examples/make_boat_animation.py` | Renders the case study 2 animation from a full simulation (needs ffmpeg, about 15 minutes). Blue lines mark the Kelvin cusp lines. Each red laser ends where the fitted HYDAR track places the boat when the cusp line first reaches that array. |
 | `examples/make_hero_animation.py` | Renders the animation at the top of this page from a full simulation (needs ffmpeg, about 5 minutes). `hydar` computes the waves, arrival times and final fix; the drone and splash are decoration. |
 | `docs/make_figures.py` | Regenerates the figures in this README (PNG at 600 dpi, plus editable PDF and SVG) in the author's paper figure style (`docs/paperfig.py`), sized for a 170 mm text width. |
@@ -268,6 +269,8 @@ So the claim holds for the ferry and does not hold in general for the boat. In t
 
 ## Case study 5: a fish finds a rock from its Kármán vortex street
 
+<p align="center"><img src="docs/img/hydar_fish.gif" alt="A fish holds station at 19 points across a river behind a rock, the vortex street sweeps past its lateral line, and a red laser traces the HYDAR fix back to the rock" width="720"></p>
+
 Case studies 1 to 4 locate a source from the **waves** it radiates. A rock in a river radiates almost nothing, but the current sheds a **Kármán vortex street** from it, and the street is carried downstream past anything that waits there. Trout hold station in such streets and time their swimming to them (Liao et al. 2003). This case study asks whether a fish-sized body with a lateral line of pressure sensors can find the rock from that street alone. HYDAR's time of flight becomes a **time of convection**: the street arrives at the fish's head before its mid-body, which says the source is upstream and how fast the street travels.
 
 **Scenario** (`examples/08_fish_rock.py`, `hydar.karman`). The values the request did not fix are assumptions, chosen for a small gravel-bed river:
@@ -307,7 +310,7 @@ fix = locate_rock(survey)
 print(fix.x, fix.y, fix.diameter)
 ```
 
-**Benchmark.** `examples/09_benchmark_fish_rock.py` repeats the survey with 25 seeds per setting: a random lateral rock position (|y| ≤ 0.8 m), shedding phase, turbulence and sensor noise. It reports the lateral error, the distance error and the error of D. Results are in [`docs/data/fish_rock_benchmark.csv`](docs/data/fish_rock_benchmark.csv).
+**Benchmark.** `examples/09_benchmark_fish_rock.py` repeats the survey with 25 seeds per setting: a random lateral rock position (|y| ≤ 0.8 m), shedding phase, turbulence and sensor noise. It reports the lateral error, the distance error and the error of D. Results are in [`docs/data/fish_rock_benchmark.csv`](docs/data/fish_rock_benchmark.csv); the full results tables (all 16 settings of distance and turbulence, and all 9 wake models) are in [`docs/data/fish_rock_summary.md`](docs/data/fish_rock_summary.md) and are regenerated from the CSV with `python examples/09_benchmark_fish_rock.py --summary`. Figure 9 plots them.
 
 *The fish's wake model equals the true one; rows differ in distance and river turbulence (Tu):*
 
@@ -326,7 +329,7 @@ print(fix.x, fix.y, fix.diameter)
 | 12 m | 10 % | 22/25 | 0.09 m (0.17 m) | +1.51 m | 1.56 m (2.8 m) | +7.9 ± 4.0 % |
 | 12 m | 15 % | 13/25 | 0.46 m (1.46 m) | −8.88 m | 8.88 m (9.5 m) | +95 ± 178 % |
 
-The rows for Tu = 5 % lie between those for 0 and 10 % and are in the CSV file.
+The rows for Tu = 5 % lie between those for 0 and 10 % and are in the summary tables.
 
 *The true wake differs from the fish's model (6 m behind the rock, Tu = 10 %):*
 
@@ -352,7 +355,11 @@ So the fish finds the line the rock sits on (the streamline through it) to a few
 
 ![Figure 8](docs/img/fig09_fish_rock.png)
 
-**Figure 8.** Case study 5. **a**, plan view of the river with a snapshot of the street's pressure (banks shaded). The rock (grey, open circle at its centre) sheds the street; the fish (black bar) surveys 19 stations across the river 6 m downstream. The red cross is the fish's estimate of the rock. **b**, cross section: trapezoidal channel and the hemisphere, half above the water. **c**, the fish and its 10 sensors: 5 on the head third, 5 on the middle third, none on the tail third. **d**, pressure at the head and mid-body sensors at the station with the strongest street (low-passed at 1 Hz for display): the mid-body trace lags by the convection time. **e**, amplitude of f and 2f across the river, measured and fitted; the dotted line is the true rock position. **f**, fit misfit over the rock's lateral position and distance (dark is better); open circle: truth, cross: estimate. **g**, median absolute distance error against distance for four turbulence intensities (shading: 25th to 75th percentile, 25 runs); a point is missing where fewer than half the runs detected the street. **h**, median distance error (bars: 25th to 75th percentile) when the true wake differs from the model the fish assumes, 6 m behind the rock in 10 % turbulence.
+**Figure 8.** Case study 5. **a**, plan view of the river with a snapshot of the street's pressure (banks shaded). The rock (grey, open circle at its centre) sheds the street; the fish (black bar) surveys 19 stations across the river 6 m downstream. The red cross is the fish's estimate of the rock. **b**, cross section: trapezoidal channel and the hemisphere, half above the water. **c**, the fish and its 10 sensors: 5 on the head third, 5 on the middle third, none on the tail third. **d**, pressure at the head and mid-body sensors at the station with the strongest street (low-passed at 1 Hz for display): the mid-body trace lags by the convection time. **e**, amplitude of f and 2f across the river, measured and fitted; the dotted line is the true rock position. **f**, fit misfit over the rock's lateral position and distance (dark is better); open circle: truth, cross: estimate.
+
+![Figure 9](docs/img/fig10_fish_rock_results.png)
+
+**Figure 9.** Case study 5 benchmark (625 surveys). **a** to **c**, the fish's wake model equals the true one: median absolute lateral error (**a**) and distance error (**b**) against distance behind the rock for four turbulence intensities (shading: 25th to 75th percentile over the runs that detected the street, 25 runs per point), and the error of the rock diameter D (**c**, mean ± SD). **d**, share of runs that detected the street. **e** to **g**, median absolute lateral, distance and diameter errors (bars: 25th to 75th percentile) when the true wake differs from the model the fish assumes, 6 m behind the rock in 10 % turbulence. The lateral position barely depends on the wake model; the distance does.
 
 **Assumptions.** The vortex street is kinematic: positions, strengths and core sizes follow prescribed laws (Strouhal number, convection ratio, von Kármán spacing and circulation, Lamb-Oseen cores with an eddy viscosity, bed-friction decay) rather than a flow solution. The tapering hemisphere is assumed to shed one frequency set by its depth-averaged diameter; real tapered bodies can shed in cells at several frequencies. The Reynolds number (4.6 × 10⁵) is near the drag crisis of a smooth cylinder; St = 0.2 is assumed for a rough rock in turbulent flow, and the benchmark tests 0.17 and 0.23. The flow is uniform across the street (the stream velocity at the rock), the banks are vertical walls at the waterline, and the rock's own surface waves (Froude number 0.31) are left out. The fish is a passive probe: its body, its swimming and its own flow do not disturb the pressure, and it moves between stations instantly. The turbulence is frozen and has the same statistics everywhere.
 
@@ -470,10 +477,10 @@ hydar/
   locate.py     HYDAR: arrival picking, TDOA bearing, TOF range, multi-array fusion,
                 and boat tracking from the Kelvin or Mach wake (pick_wake, track_boat)
   plotting.py   time-series and map plots
-examples/       runnable scripts (01 to 07) and the two animations
+examples/       runnable scripts (01 to 09) and the three animations
 tests/          pytest suite (slow end-to-end tests are marked `slow`)
 docs/img/       figures used in this README
-docs/data/      benchmark results (case studies 4 and 5)
+docs/data/      benchmark results (case studies 4 and 5) and the case study 5 results tables
 repository_review/  dated whole-repository reviews with finding IDs and their status
 .github/workflows/  tests on every pull request, on the oldest and newest supported versions
 ```
