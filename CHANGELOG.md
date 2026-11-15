@@ -7,6 +7,9 @@
 - **Case study 5: a fish finds a rock from its Kármán vortex street** (`hydar.karman`). A hemispherical rock, half of its height above the water, in a river with a trapezoidal cross section sheds a vortex street; a 25 cm fish with 10 lateral-line pressure sensors (5 on the head third, 5 on the middle third, none on the tail third) surveys the river across the flow and estimates the rock's lateral position, size and distance. `TrapezoidalChannel` (Manning flow), `HemisphereRock`, `KarmanStreet` (kinematic street: Strouhal shedding, von Kármán spacing and circulation, Lamb-Oseen cores with eddy-viscosity growth, bed-friction decay, banks as images, unsteady Bernoulli pressure), `Fish`, `RiverTurbulence`, `lateral_survey` and `locate_rock`.
 - `examples/08_fish_rock.py` (about 10 s) and `examples/09_benchmark_fish_rock.py` (625 runs, about 30 minutes on 4 cores; results in `docs/data/fish_rock_benchmark.csv`).
 - README case study 5 with Figure 8 (`docs/make_figures.py 7`), 10 tests in `tests/test_karman.py`, and five references (Chen & Jirka 1995, Chow 1959, Liao et al. 2003, von Kármán 1911, Williamson 1996).
+- Case study 5 animation `docs/img/hydar_fish.gif` / `.mp4` (`examples/make_fish_animation.py`), rendered from a real survey in the style of the other animations.
+- Figure 9 (`fig10_fish_rock_results`): the benchmark in seven panels (lateral, distance and diameter errors and detection rate against distance and turbulence; errors under a wrong wake model). The benchmark panels of Figure 8 moved there.
+- Results tables `docs/data/fish_rock_summary.md` (all 25 settings), written by the benchmark and rebuilt from the CSV with `examples/09_benchmark_fish_rock.py --summary`.
 
 ### Case study 5 results
 
