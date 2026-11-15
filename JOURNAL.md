@@ -25,12 +25,17 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 - **Repository review 2026-11-14: remaining items** (`repository_review/2026-11-14-comprehensive-repository-review.md`).
   Open: HYDAR-006 (ferry depth, above), 010 (Zenodo DOI, above), 020 (chirp fit, above); partially resolved:
   016 (`KelvinShip.wake` hard-codes rho = 1000), 017 (32 MB of figures in git history; LFS or release assets
-  is Jeff's decision). Review and remediation were merged with PR #4 (cf4f657, merge commit, so the
+  is Jeff's decision; case study 5 added two versions of `hydar_fish.gif`, 15 and 25 MB, on 2026-11-15). Review and remediation were merged with PR #4 (cf4f657, merge commit, so the
   commit hashes cited in the review stay valid).
-- **Case study 5: distance depends on the wake-ageing model.** The fish's range comes from core growth and bed-friction decay, so a wrong eddy viscosity or roughness biases it by 1.3 to 2.8 m at 6 m; D is 23 to 29 % too large at 3 m (near wake). Untried: a fish that swims upstream along the found line, two surveys at different distances (ratio method), a body-bound flow model for the fish (it is a passive probe now), and the version number for this addition (CHANGELOG "Unreleased"; Jeff decides). Start at `hydar/karman.py` (`locate_rock`, `_fit`) and `examples/09_benchmark_fish_rock.py`.
+- **Case study 5: distance depends on the wake-ageing model.** The fish's range comes from core growth and bed-friction decay, so a wrong eddy viscosity or roughness biases it by 1.3 to 2.8 m at 6 m; D is 23 to 29 % too large at 3 m (near wake). Untried: a fish that swims upstream along the found line, two surveys at different distances (ratio method), a body-bound flow model for the fish (it is a passive probe now), a near-wake model from the rock to the formation point at 1.5 D (the 3 m rows and the animation's straight dye both show it is missing), and the version number for this addition (CHANGELOG "Unreleased"; Jeff decides). Start at `hydar/karman.py` (`locate_rock`, `_fit`) and `examples/09_benchmark_fish_rock.py`.
 - **New references unverified by Jeff (case study 5):** Chen & Jirka (1995, doi 10.1016/0169-5983(95)00053-G), Chow (1959), Liao et al. (2003, doi 10.1126/science.1088295), von Kármán (1911), Williamson (1996, doi 10.1146/annurev.fl.28.010196.002401).
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
+
+## 2026-11-15 — Case study 5 and the README limitations wording are on main; PR #6 was carried over, not merged
+
+**Decided** (Jeff: wrap up, commit and merge any remaining changes to main): case study 5 merged in three PRs (#7 code and benchmark, #8 animation, Figure 9 and results tables, #9 dye and translucent river in the animation). PR #6 (README limitations wording from the review thread) conflicted with the vortex-street bullet; its commit was cherry-picked onto `claude/project-thread-qmz92f` with both bullets kept and merged from there, so PR #6 itself can be closed unmerged.
+**Rejected**: merging main into PR #6's branch, the usual fix: pushing to a branch another session opened was blocked without Jeff's explicit approval for that branch, and carrying the commit over reaches the same result.
 
 ## 2026-11-15 — The fish animation shows the vortices being shed from the rock with dye advected by the street
 
