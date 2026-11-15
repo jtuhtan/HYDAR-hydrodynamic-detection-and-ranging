@@ -4,14 +4,23 @@
 
 <p align="center"><img src="docs/img/hydar_hero.gif" alt="A drone drops a sphere, the waves wash over four sensor arrays, and red lasers trace the HYDAR fix back to the drop point" width="720"></p>
 
-**HYDAR** locates objects in water from the surface waves they make. Arrays of pressure sensors record the passing waves, and the **time of flight** of the wave front gives the **direction and distance** from each array's centre to the source. HYDAR works like radar or sonar, but its signal is a water wave rather than an electromagnetic or acoustic echo.
+**HYDAR** locates objects in water from the surface waves they make. Arrays of pressure sensors record the passing waves, and the **time of flight** of the wave front gives the **direction and distance** from each array's centre to the source. HYDAR works like radar or sonar, but its signal is a water wave rather than an electromagnetic or acoustic echo. The same idea carries over to flow structures that are convected rather than radiated: in case study 5, a fish's lateral line finds a rock in a river from the vortex street the rock sheds.
 
-This repository is a self-contained Python simulator for developing and testing HYDAR. It has four parts:
+This repository is a self-contained Python simulator for developing and testing HYDAR. It has five parts:
 
-1. **Wave solvers.** A 2D shallow-water solver on a large rectangular domain with non-reflecting walls, and a **dispersive** linear potential-flow solver, with the exact dispersion relation, for boat wakes.
-2. **Drop objects.** A sphere of chosen diameter and density is dropped at a chosen point; it sinks or floats and makes surface waves.
-3. **Pressure sensor arrays.** Arrays such as 3 × 3 sensors at 1 m spacing can be placed at any x, y and depth z, and sample at 100 Hz.
-4. **HYDAR localization.** Each array estimates a bearing from time differences of arrival and a range from time of flight; the arrays' estimates are then fused.
+1. **Wave and flow models.** A 2D shallow-water solver on a large rectangular domain with non-reflecting walls; a **dispersive** linear potential-flow solver, with the exact dispersion relation, for boat wakes; a synthetic Kelvin wake for ships far offshore; and a kinematic Kármán vortex street in a trapezoidal river.
+2. **Sources.** A sphere of chosen diameter and density that sinks or floats; boats with a Series 60 hull; ships on a straight course; a hemispherical rock on a river bed.
+3. **Pressure sensor arrays.** Arrays such as 3 × 3 sensors at 1 m spacing, or any layout, can be placed at any x, y and depth z, and sample at 100 Hz. A fish carries 10 sensors along its lateral line.
+4. **HYDAR localization.** Each array estimates a bearing from time differences of arrival and a range from time of flight, and the arrays' estimates are fused. Vessels are tracked from their wakes, with Kelvin wake theory or by correlative interferometry without it.
+5. **Benchmarks.** Monte Carlo comparisons over noise, wind sea, turbulence and model error (case studies 4 and 5), with all results in `docs/data/`.
+
+| Case study | Source and sensors | Method |
+|---|---|---|
+| [1](#case-study-1-locating-a-dropped-sphere) | Sphere dropped among four 3 × 3 arrays | Arrival times: bearing, range and fused fix |
+| [2](#case-study-2-tracking-a-small-boat-from-its-kelvin-wake) | 4.5 m boat, four arrays 8 to 18 m away | Kelvin cusp-line picks, straight-track fit |
+| [3](#case-study-3-locating-a-passing-ferry-from-its-kelvin-wake) | Ferry 2.5 km from one seabed array | Kelvin chirp and wake direction, after Rätsep et al. (2020, 2021) |
+| [4](#case-study-4-array-design-and-ship-tracking-by-correlative-interferometry) | Ferry and boat of case studies 2 and 3 | Array design and tracking by correlative interferometry, benchmarked against 2 and 3 |
+| [5](#case-study-5-a-fish-finds-a-rock-from-its-kármán-vortex-street) | Rock in a river, fish with 10 lateral-line sensors | Frequency, phase and symmetry of the vortex street; distance from a wake-ageing model |
 
 <p align="center"><img src="docs/img/fig04_hydar_map.png" alt="HYDAR localization map" width="420"></p>
 
@@ -29,7 +38,7 @@ cd HYDAR-hydrodynamic-detection-and-ranging
 pip install -e ".[test]"
 
 python examples/03_hydar_localization.py   # full pipeline, about 40 s
-pytest -m "not slow"                       # 36 fast tests, about 2 minutes (all 41 with plain pytest: about 5)
+pytest -m "not slow"                       # 46 fast tests, about 2 minutes (all 51 with plain pytest: about 5)
 ```
 
 ```python
@@ -412,7 +421,7 @@ Here $V_{sub}$ is the spherical-cap volume below the local water level, and $C_a
 
 ### 4. Pressure sensors
 
-A `SensorArray` is an n_x × n_y grid of sensors (3 × 3 at 1 m by default) centred at (x, y) and mounted at depth z < 0. η is interpolated bilinearly to each sensor at every solver step and resampled at `fs` = 100 Hz. The solver step must be shorter than 1/fs, and the code checks this. Gauge pressure is the hydrostatic head plus a dynamic part:
+A `SensorArray` is an n_x × n_y grid of sensors (3 × 3 at 1 m by default) centred at (x, y) and mounted at depth z < 0; `layout=` places the sensors at any offsets from the centre instead (case study 4). η is interpolated bilinearly to each sensor at every solver step and resampled at `fs` = 100 Hz. The solver step must be shorter than 1/fs, and the code checks this. Gauge pressure is the hydrostatic head plus a dynamic part:
 
 $$
 p(t) = \rho g(-z) + p_{dyn}(t)
@@ -452,7 +461,7 @@ In example 3, every bearing is within 0.4° of the truth, the single-array range
 ## Assumptions and limitations
 
 * **Shallow-water physics (drop case).** The drop examples use the shallow-water `Solver`. Because it is linear and non-dispersive, it is valid only for waves much longer than the depth and for amplitudes much smaller than the depth. Real waves from objects smaller than the water depth are dispersive: longer waves outrun shorter ones, and the front spreads out. The dispersive `SpectralSolver` is forced by surface pressure only and does not yet take the sphere's volume source, so adding a `DropObject` to it raises an error. Arrival picking would also have to account for the group velocity.
-* **Idealized water.** The depth is uniform and the bottom flat. Case studies 1 and 2 have no current, wind waves or sensor noise; case study 3 adds wind sea and noise.
+* **Idealized water.** In case studies 1 to 4 the depth is uniform and the bottom flat; case study 5 has a trapezoidal river of uniform depth on its bed. Case studies 1 and 2 have no current, wind waves or sensor noise; case study 3 adds wind sea and sensor noise, case study 4 adds wind sea to both vessel scenarios, and case study 5 adds a steady current, frozen river turbulence and sensor noise.
 * **Sphere motion.** The sphere moves only vertically, and it is a wave source only while it crosses the surface. A fully submerged moving body does not radiate in this model.
 * **Sensors.** All sensors are ideal point gauges.
 * **Interferometry (case study 4).** The tracker assumes plane waves across each array, a straight track at constant speed and a known dispersion relation (deep water or a given depth). Its benefit over the Kelvin methods depends on the scenario; see the benchmark in case study 4. All comparisons are on simulated records; none has been checked against field data.
@@ -495,7 +504,7 @@ HYDAR was conceived and created by **Jeff Tuhtan**.
 
 ## How to cite
 
-HYDAR v1.0.0 is archived on Zenodo with the DOI [10.5281/zenodo.23881055](https://doi.org/10.5281/zenodo.23881055). Version v1.2.0 adds case study 4 and the changes from the repository review; its own Zenodo DOI will be listed here once the release is archived. If you use HYDAR in your work, please cite it as:
+HYDAR v1.0.0 is archived on Zenodo with the DOI [10.5281/zenodo.23881055](https://doi.org/10.5281/zenodo.23881055). Version v1.3.0 adds case studies 4 and 5 and the changes from the repository review of 2026-11-14 (v1.1.0 and v1.2.0 were not released on their own; see [CHANGELOG](CHANGELOG.md)). v1.3.0 is a minor release and is not archived separately on Zenodo, so the v1.0.0 DOI remains the one to cite; please name the version you used. If you use HYDAR in your work, please cite it as:
 
 > Tuhtan, J. (2026). *HYDAR: Hydrodynamic Detection and Ranging* (Version v1.0.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23881055
 
