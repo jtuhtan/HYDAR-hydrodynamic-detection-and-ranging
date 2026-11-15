@@ -71,6 +71,8 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 | `examples/05_vessel_localization.py` | Case study 3: one 3 × 3 seabed array locates a ferry 2.5 km offshore from its Kelvin wake, after Rätsep et al. (2020, 2021) (about 1 minute). |
 | `examples/06_array_design.py` | Case study 4: designs the optimal 3 × 3 array for correlative interferometry, then tracks the case study 3 ferry with it, without Kelvin wake theory, and compares with the Kelvin method (about 2 minutes). |
 | `examples/07_benchmark_interferometry.py` | Case study 4 benchmark: Monte Carlo comparison of interferometry and the Kelvin methods of case studies 2 and 3 for accuracy, precision and wind noise (about 30 minutes on 4 cores). Writes `docs/data/ci_benchmark.csv`. |
+| `examples/08_fish_rock.py` | Case study 5: a 25 cm fish with 10 lateral-line pressure sensors finds a rock in a trapezoidal river from the rock's Kármán vortex street (about 10 s). |
+| `examples/09_benchmark_fish_rock.py` | Case study 5 benchmark: 625 Monte Carlo surveys over distance, river turbulence and a wake model that differs from the fish's (about 30 minutes on 4 cores). Writes `docs/data/fish_rock_benchmark.csv`. |
 | `examples/make_boat_animation.py` | Renders the case study 2 animation from a full simulation (needs ffmpeg, about 15 minutes). Blue lines mark the Kelvin cusp lines. Each red laser ends where the fitted HYDAR track places the boat when the cusp line first reaches that array. |
 | `examples/make_hero_animation.py` | Renders the animation at the top of this page from a full simulation (needs ffmpeg, about 5 minutes). `hydar` computes the waves, arrival times and final fix; the drone and splash are decoration. |
 | `docs/make_figures.py` | Regenerates the figures in this README (PNG at 600 dpi, plus editable PDF and SVG) in the author's paper figure style (`docs/paperfig.py`), sized for a 170 mm text width. |
@@ -264,6 +266,98 @@ So the claim holds for the ferry and does not hold in general for the boat. In t
 
 ---
 
+## Case study 5: a fish finds a rock from its Kármán vortex street
+
+Case studies 1 to 4 locate a source from the **waves** it radiates. A rock in a river radiates almost nothing, but the current sheds a **Kármán vortex street** from it, and the street is carried downstream past anything that waits there. Trout hold station in such streets and time their swimming to them (Liao et al. 2003). This case study asks whether a fish-sized body with a lateral line of pressure sensors can find the rock from that street alone. HYDAR's time of flight becomes a **time of convection**: the street arrives at the fish's head before its mid-body, which says the source is upstream and how fast the street travels.
+
+**Scenario** (`examples/08_fish_rock.py`, `hydar.karman`). The values the request did not fix are assumptions, chosen for a small gravel-bed river:
+
+| Part | Value |
+|---|---|
+| River | Straight, trapezoidal: 4 m flat bed, 1 : 2 banks, 0.25 m deep on the bed (5 m wide at the surface), bed slope 0.002, Manning n 0.035. Manning's equation (Chow 1959) gives 0.47 m/s mean velocity, 0.52 m³/s, Froude number 0.31 |
+| Rock | Hemisphere resting on the bed, **half of its height above the water**: radius 0.50 m (twice the depth), 0.87 m wide at the waterline. Its depth-averaged diameter D = 0.96 m sets the shedding |
+| Street | Strouhal number St = 0.2 (Williamson 1996), so f = St U / D = 0.10 Hz at U = 0.48 m/s; convection speed U_c = 0.88 U = 0.42 m/s; like vortices 4.2 m apart, rows 1.18 m apart (von Kármán's ratio 0.281, von Kármán 1911); circulation 0.68 m²/s from the self-induced speed of the street; Reynolds number 4.6 × 10⁵; shallow-wake stability number 0.04, well inside the vortex-street regime (Chen & Jirka 1995) |
+| Fish | 25 cm long, head upstream, at mid-depth. **10 pressure sensors** on one line along the body: 5 evenly spread over the head third (0.8 to 7.5 cm from the snout) and 5 over the middle third (9.2 to 15.8 cm), 1.67 cm apart. The tail third has no sensors |
+| Noise | 2 Pa white noise per sensor (as in case study 4) and river turbulence: a frozen random pressure field carried at U, with an RMS of ρ (Tu U)² and an f^(−7/3) inertial range; Tu = 10 % gives 2.3 Pa |
+
+**The street model.** Vortices form 1.5 D behind the rock and drift downstream in two rows. Each is a Lamb-Oseen vortex whose core grows by turbulent diffusion (eddy viscosity ν_t = 0.01 U D) and whose circulation decays by bed friction (rate c_f U / h, with c_f = g n² / h^(1/3)). The banks are reflecting walls (method of images). The pressure is the unsteady Bernoulli pressure of the moving pattern, with each vortex's own pressure taken from its cyclostrophic balance inside the core. The vortices are prescribed, not computed: this is a kinematic model of a street, not a flow simulation.
+
+**How the fish finds the rock.** The fish holds station at 19 positions across the river, 0.2 m apart, for 60 s each (19 minutes), at a fixed distance behind the rock.
+
+1. **Detection and frequency.** The averaged spectrum shows a line at f and its harmonic 2f.
+2. **Convection speed and direction.** At each station, the phase of f and 2f falls linearly from head to mid-body. The slope gives U_c, and its sign says the street comes from upstream. The 15 cm of the sensor line see a phase difference of only 13° at f, which is enough at these signal levels.
+3. **Size.** With assumed St and U_c / U, the stream speed is U = U_c / 0.88 and the rock's shedding diameter is D = St U / f.
+4. **Lateral position.** The amplitude of f peaks near each vortex row and vanishes on the street's centreline, where only 2f is left. The rock lies on the centreline of this mirror-symmetric pattern.
+5. **Distance.** As the street ages, its cores grow and its circulation decays, so the lateral profiles get lower and wider with distance. Fitting the model's profiles (with D, U and U_c from steps 2 and 3) to the measured ones gives the distance and refines the lateral position. The strongest spectral line could be 2f rather than f; both readings are fitted and the one that matches better is kept, provided its line at f stands out of the noise.
+
+Steps 1 to 4 use only the frequency, the phase and the mirror symmetry of the street. Step 5 needs a model of how the street ages, and the benchmark shows how much the answer depends on it.
+
+In example 8 (rock at y = 0.4 m, fish 6 m behind it, 10 % turbulence), the fish estimates f within 0.2 %, U_c within 1.4 %, D within 1.4 %, the distance as 5.99 m (true 6.00 m) and the lateral position as 0.39 m (true 0.40 m).
+
+```python
+from hydar.karman import (HemisphereRock, KarmanStreet, RiverTurbulence, TrapezoidalChannel,
+                          lateral_survey, locate_rock)
+
+river = TrapezoidalChannel(bed_width=4.0, side_slope=2.0, depth=0.25, slope=0.002, manning_n=0.035)
+rock = HemisphereRock.from_protrusion(river, x=0.0, y=0.4, protrusion=0.5)
+street = KarmanStreet(river, rock)
+survey = lateral_survey(street, x_snout=5.92, ys=[-1.8 + 0.2 * i for i in range(19)],
+                        turbulence=RiverTurbulence(street.U, intensity=0.1))
+fix = locate_rock(survey)
+print(fix.x, fix.y, fix.diameter)
+```
+
+**Benchmark.** `examples/09_benchmark_fish_rock.py` repeats the survey with 25 seeds per setting: a random lateral rock position (|y| ≤ 0.8 m), shedding phase, turbulence and sensor noise. It reports the lateral error, the distance error and the error of D. Results are in [`docs/data/fish_rock_benchmark.csv`](docs/data/fish_rock_benchmark.csv).
+
+*The fish's wake model equals the true one; rows differ in distance and river turbulence (Tu):*
+
+| Distance | Tu | Detected | Lateral error, median (90 %) | Distance error, median | Distance error, median abs. (90 %) | D error, mean ± SD |
+|---|---|---|---|---|---|---|
+| 3 m | 0 | 25/25 | 0.02 m (0.04 m) | +0.38 m | 0.38 m (0.41 m) | +29 ± 1 % |
+| 3 m | 10 % | 25/25 | 0.04 m (0.09 m) | +0.37 m | 0.37 m (10.7 m) | +27 ± 3 % |
+| 3 m | 15 % | 25/25 | 0.08 m (0.17 m) | +0.34 m | 0.34 m (8.5 m) | +23 ± 5 % |
+| 6 m | 0 | 25/25 | 0.01 m (0.01 m) | −0.16 m | 0.16 m (0.30 m) | +0.3 ± 0.7 % |
+| 6 m | 10 % | 25/25 | 0.01 m (0.02 m) | −0.04 m | 0.13 m (0.23 m) | +1.1 ± 0.8 % |
+| 6 m | 15 % | 25/25 | 0.02 m (0.06 m) | +0.25 m | 0.28 m (0.68 m) | +3.2 ± 1.1 % |
+| 9 m | 0 | 25/25 | 0.00 m (0.01 m) | −0.12 m | 0.15 m (0.35 m) | +0.8 ± 1.1 % |
+| 9 m | 10 % | 25/25 | 0.03 m (0.07 m) | +0.29 m | 0.29 m (0.56 m) | +3.0 ± 1.4 % |
+| 9 m | 15 % | 20/25 | 0.13 m (0.61 m) | +0.49 m | 0.92 m (6.1 m) | +7.7 ± 2.5 % |
+| 12 m | 0 | 25/25 | 0.00 m (0.02 m) | −0.03 m | 0.50 m (1.6 m) | +2.0 ± 3.9 % |
+| 12 m | 10 % | 22/25 | 0.09 m (0.17 m) | +1.51 m | 1.56 m (2.8 m) | +7.9 ± 4.0 % |
+| 12 m | 15 % | 13/25 | 0.46 m (1.46 m) | −8.88 m | 8.88 m (9.5 m) | +95 ± 178 % |
+
+The rows for Tu = 5 % lie between those for 0 and 10 % and are in the CSV file.
+
+*The true wake differs from the fish's model (6 m behind the rock, Tu = 10 %):*
+
+| True wake | Detected | Lateral error, median (90 %) | Distance error, median | D error, mean ± SD |
+|---|---|---|---|---|
+| Same as the model | 25/25 | 0.01 m (0.02 m) | −0.04 m | +1.1 ± 0.8 % |
+| Strouhal number 0.17 (model 0.2) | 25/25 | 0.01 m (0.03 m) | +0.45 m | +21 ± 1 % |
+| Strouhal number 0.23 | 25/25 | 0.01 m (0.03 m) | −0.22 m | −12 ± 1 % |
+| U_c / U = 0.80 (model 0.88) | 25/25 | 0.01 m (0.01 m) | −1.88 m | −8.7 ± 0.3 % |
+| U_c / U = 0.95 | 21/25 | 0.26 m (1.77 m) | −3.43 m | +13 ± 6 % |
+| Eddy viscosity of the cores × 0.5 | 25/25 | 0.01 m (0.01 m) | −1.61 m | +0.3 ± 0.4 % |
+| Eddy viscosity × 2 | 25/25 | 0.02 m (0.05 m) | +2.20 m | +2.9 ± 1.6 % |
+| Bed roughness n = 0.025 (model 0.035) | 25/25 | 0.01 m (0.01 m) | −1.32 m | +0.8 ± 0.4 % |
+| Bed roughness n = 0.050 | 25/25 | 0.04 m (0.06 m) | +2.83 m | +4.3 ± 3.8 % |
+
+**What the benchmark shows.**
+
+* **The lateral position is robust.** It comes from the mirror symmetry of the street, so it needs no wake model. The median error is 1 to 4 cm up to 9 m behind the rock in turbulence up to 10 %, and stays at 4 cm or less whatever the wake model gets wrong, except when the street is so weak that it is barely detected (U_c / U = 0.95 gives a circulation of less than half the nominal one).
+* **The rock's size is right only once the street has formed.** From 6 to 9 m behind the rock, D is within 1 to 3 % in turbulence up to 10 %. At 3 m (3 D), D comes out 23 to 29 % too large in every run: the vortices are still gaining strength there, so the phase along the body travels faster than the convection speed the fish assumes. D also carries any error of the assumed Strouhal number one for one (+21 % for St = 0.17).
+* **The distance is accurate when the model is right, and only as good as the model otherwise.** With the true wake model, the median distance error is 0.13 to 0.29 m at 6 to 9 m in turbulence up to 10 %. At 3 m it is 0.4 m, with a few runs off by 8 to 11 m in turbulence, where the misfit has a second minimum far downstream. Detection fades with distance and turbulence: at 12 m in 15 % turbulence the street was detected in 13 of 25 runs, and those fixes are poor. When the wake ages differently from the model, the distance is biased by 1.3 to 2.8 m (eddy viscosity halved or doubled, bed roughness 0.025 or 0.05, convection ratio 0.80). This is the price of ranging from the street's ageing: the fish needs to know how fast the cores grow and how strongly the bed damps them.
+
+So the fish finds the line the rock sits on (the streamline through it) to a few centimetres, and how big the rock is to a few per cent once it is more than about 5 D downstream. How far upstream the rock is depends on the wake model: it is right to 0.1 to 0.3 m when the model is right, and off by up to 3 m when the eddy viscosity or the bed roughness is wrong by a factor of 1.5 to 2. A fish that swims upstream along the found line would remove that dependence; the model does not include it.
+
+![Figure 8](docs/img/fig09_fish_rock.png)
+
+**Figure 8.** Case study 5. **a**, plan view of the river with a snapshot of the street's pressure (banks shaded). The rock (grey, open circle at its centre) sheds the street; the fish (black bar) surveys 19 stations across the river 6 m downstream. The red cross is the fish's estimate of the rock. **b**, cross section: trapezoidal channel and the hemisphere, half above the water. **c**, the fish and its 10 sensors: 5 on the head third, 5 on the middle third, none on the tail third. **d**, pressure at the head and mid-body sensors at the station with the strongest street (low-passed at 1 Hz for display): the mid-body trace lags by the convection time. **e**, amplitude of f and 2f across the river, measured and fitted; the dotted line is the true rock position. **f**, fit misfit over the rock's lateral position and distance (dark is better); open circle: truth, cross: estimate. **g**, median absolute distance error against distance for four turbulence intensities (shading: 25th to 75th percentile, 25 runs); a point is missing where fewer than half the runs detected the street. **h**, median distance error (bars: 25th to 75th percentile) when the true wake differs from the model the fish assumes, 6 m behind the rock in 10 % turbulence.
+
+**Assumptions.** The vortex street is kinematic: positions, strengths and core sizes follow prescribed laws (Strouhal number, convection ratio, von Kármán spacing and circulation, Lamb-Oseen cores with an eddy viscosity, bed-friction decay) rather than a flow solution. The tapering hemisphere is assumed to shed one frequency set by its depth-averaged diameter; real tapered bodies can shed in cells at several frequencies. The Reynolds number (4.6 × 10⁵) is near the drag crisis of a smooth cylinder; St = 0.2 is assumed for a rough rock in turbulent flow, and the benchmark tests 0.17 and 0.23. The flow is uniform across the street (the stream velocity at the rock), the banks are vertical walls at the waterline, and the rock's own surface waves (Froude number 0.31) are left out. The fish is a passive probe: its body, its swimming and its own flow do not disturb the pressure, and it moves between stations instantly. The turbulence is frozen and has the same statistics everywhere.
+
+---
+
 ## Theory
 
 ### 1. Wave model
@@ -355,6 +449,7 @@ In example 3, every bearing is within 0.4° of the truth, the single-array range
 * **Sphere motion.** The sphere moves only vertically, and it is a wave source only while it crosses the surface. A fully submerged moving body does not radiate in this model.
 * **Sensors.** All sensors are ideal point gauges.
 * **Interferometry (case study 4).** The tracker assumes plane waves across each array, a straight track at constant speed and a known dispersion relation (deep water or a given depth). Its benefit over the Kelvin methods depends on the scenario; see the benchmark in case study 4.
+* **Vortex street (case study 5).** The street is kinematic, not computed: vortex positions, strengths and core growth follow prescribed laws, and the fish is a passive probe that does not disturb the flow. Its distance estimate depends on how the street ages (core growth and bed friction), which the fish has to assume; see the benchmark in case study 5.
 * **Boats.** The dispersive solver of case study 2 produces the Kelvin wake, but it is still linear. The hull is a pressure patch rather than a body boundary, and the model leaves out wave breaking and nonlinear steepening near the hull. The tracking fit assumes a straight track at constant speed and the deep-water Kelvin angle. That angle holds while the depth Froude number U/√(gh) stays below about 0.6; it is 0.55 here. In the shallow-water `Solver`, only supercritical boats (U > √(gh)) make a wake, a Mach cone, which `track_boat(..., wake="mach")` tracks.
 
 ## Repository layout
@@ -369,6 +464,8 @@ hydar/
                 vessel localization (case study 3)
   interferometry.py  array design and vessel tracking by correlative interferometry,
                 without Kelvin wake theory (case study 4)
+  karman.py     trapezoidal river, hemisphere rock, Karman vortex street, fish lateral line,
+                river turbulence, and locating the rock from the street (case study 5)
   sensors.py    SensorArray (3x3 at 1 m, or any layout; 100 Hz, x/y/z placement, depth response)
   locate.py     HYDAR: arrival picking, TDOA bearing, TOF range, multi-array fusion,
                 and boat tracking from the Kelvin or Mach wake (pick_wake, track_boat)
@@ -376,7 +473,7 @@ hydar/
 examples/       runnable scripts (01 to 07) and the two animations
 tests/          pytest suite (slow end-to-end tests are marked `slow`)
 docs/img/       figures used in this README
-docs/data/      benchmark results (case study 4)
+docs/data/      benchmark results (case studies 4 and 5)
 repository_review/  dated whole-repository reviews with finding IDs and their status
 .github/workflows/  tests on every pull request, on the oldest and newest supported versions
 ```
@@ -416,7 +513,13 @@ HYDAR is released under the [Creative Commons Attribution 4.0 International](htt
 
 Bérenger, J.-P. (1994). A perfectly matched layer for the absorption of electromagnetic waves. *Journal of Computational Physics*, 114(2), 185–200. https://doi.org/10.1006/jcph.1994.1159
 
+Chen, D., & Jirka, G. H. (1995). Experimental study of plane turbulent wakes in a shallow water layer. *Fluid Dynamics Research*, 16(1), 11–41. https://doi.org/10.1016/0169-5983(95)00053-G
+
+Chow, V. T. (1959). *Open-Channel Hydraulics*. McGraw-Hill, New York.
+
 Fischler, M. A., & Bolles, R. C. (1981). Random sample consensus: A paradigm for model fitting with applications to image analysis and automated cartography. *Communications of the ACM*, 24(6), 381–395. https://doi.org/10.1145/358669.358692
+
+Liao, J. C., Beal, D. N., Lauder, G. V., & Triantafyllou, M. S. (2003). Fish exploiting vortices decrease muscle activity. *Science*, 302(5650), 1566–1569. https://doi.org/10.1126/science.1088295
 
 Lighthill, J. (1978). *Waves in Fluids*. Cambridge University Press, Cambridge.
 
@@ -428,4 +531,8 @@ Todd, F. H. (1963). *Series 60: Methodical experiments with models of single-scr
 
 Van Trees, H. L. (2002). *Optimum Array Processing: Part IV of Detection, Estimation, and Modulation Theory*. Wiley, New York. https://doi.org/10.1002/0471221104
 
+von Kármán, T. (1911). Über den Mechanismus des Widerstandes, den ein bewegter Körper in einer Flüssigkeit erfährt. *Nachrichten von der Gesellschaft der Wissenschaften zu Göttingen, Mathematisch-Physikalische Klasse*, 1911, 509–517.
+
 Wehausen, J. V., & Laitone, E. V. (1960). Surface waves. In S. Flügge (Ed.), *Handbuch der Physik*, Vol. 9, 446–778. Springer, Berlin. https://doi.org/10.1007/978-3-642-45944-3_6
+
+Williamson, C. H. K. (1996). Vortex dynamics in the cylinder wake. *Annual Review of Fluid Mechanics*, 28, 477–539. https://doi.org/10.1146/annurev.fl.28.010196.002401
