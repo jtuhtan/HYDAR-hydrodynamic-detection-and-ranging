@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hydar"
-version = "1.2.0"
-description = "HYDAR: Hydrodynamic Detection and Ranging. Locate objects in water (drops, boats, ships) from the surface waves they make, using pressure-sensor arrays."
+version = "1.3.0"
+description = "HYDAR: Hydrodynamic Detection and Ranging. Locate objects in water (drops, boats, ships) from the surface waves they make, and rocks in rivers from their vortex streets, using pressure-sensor arrays."
 readme = "README.md"
 authors = [{ name = "Jeff Tuhtan" }]
-keywords = ["hydrodynamics", "surface waves", "pressure sensors", "localization", "time of flight", "Kelvin wake", "correlative interferometry", "array design", "underwater sensing"]
+keywords = ["hydrodynamics", "surface waves", "pressure sensors", "localization", "time of flight", "Kelvin wake", "correlative interferometry", "array design", "Karman vortex street", "lateral line", "underwater sensing"]
 license = { text = "CC-BY-4.0" }
 requires-python = ">=3.9"
 dependencies = ["numpy>=1.22", "scipy>=1.8", "matplotlib>=3.5"]

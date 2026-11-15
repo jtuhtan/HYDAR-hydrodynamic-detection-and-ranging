@@ -8,9 +8,10 @@ ships from their wakes (case studies 2 to 4), a rock in a river from its vortex 
 Project state and decisions live in JOURNAL.md; do not duplicate them into agent-side memory or Claude
 Project memory. When compacting, preserve decisions made and alternatives rejected — they feed JOURNAL.md.
 
-**Current focus**: v1.2.0 (case study 4, correlative interferometry, plus the fixes from the repository
-review of 2026-11-14) is on main; waiting on Jeff's GitHub release v1.2.0 and its Zenodo DOI. Case study 5
-(fish finds a rock from its Kármán vortex street, `hydar/karman.py`) is on main (PRs #7 to #9) under CHANGELOG "Unreleased"; its version number is Jeff's call.
+**Current focus**: v1.3.0 (case study 4, correlative interferometry; the fixes from the repository review
+of 2026-11-14; case study 5, a fish finds a rock from its Kármán vortex street, `hydar/karman.py`) is the
+version on main (Jeff chose 1.3, 2026-11-15); v1.1.0 and v1.2.0 were never released on their own. Jeff
+publishes the GitHub release v1.3.0 without a new Zenodo version (minor release), so the v1.0.0 DOI stays.
 
 ## Rules
 

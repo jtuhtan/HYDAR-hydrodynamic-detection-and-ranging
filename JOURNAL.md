@@ -7,9 +7,11 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 
 ## Open threads
 
-- **Zenodo DOI for v1.2.0.** Jeff publishes the GitHub release v1.2.0 (Claude sessions cannot create
-  releases or tags); Zenodo then mints a new version DOI. Add it to README "How to cite", CITATION.cff
-  (`doi`, `identifiers`, `url`) and the bibtex block. v1.0.0 DOI is 10.5281/zenodo.23881055.
+- **Zenodo for minor releases.** Jeff (2026-11-15): v1.3.0 gets a GitHub release but no new Zenodo
+  version, as it is a minor release; README, CITATION.cff and the badge keep the v1.0.0 DOI
+  10.5281/zenodo.23881055. If the Zenodo GitHub integration is switched on for the repository, publishing
+  the release archives it automatically; check that before the release. A major release gets a new DOI;
+  then update README "How to cite", CITATION.cff (`doi`, `identifiers`, `url`) and the bibtex block.
 - **Boat case: interferometry loses course precision in moderate wind** (case study 4, Hs 0.05 m: course
   SD 0.9 to 1.1 deg vs 0.21 deg for `track_boat`, 100 seeds). Only ~60 coherent observations from 6 s windows.
   Untried ideas: multi-taper cross-spectra, fusing interferometry bearings with cusp-line picks, longer
@@ -27,10 +29,15 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
   016 (`KelvinShip.wake` hard-codes rho = 1000), 017 (32 MB of figures in git history; LFS or release assets
   is Jeff's decision; case study 5 added two versions of `hydar_fish.gif`, 15 and 25 MB, on 2026-11-15). Review and remediation were merged with PR #4 (cf4f657, merge commit, so the
   commit hashes cited in the review stay valid).
-- **Case study 5: distance depends on the wake-ageing model.** The fish's range comes from core growth and bed-friction decay, so a wrong eddy viscosity or roughness biases it by 1.3 to 2.8 m at 6 m; D is 23 to 29 % too large at 3 m (near wake). Untried: a fish that swims upstream along the found line, two surveys at different distances (ratio method), a body-bound flow model for the fish (it is a passive probe now), a near-wake model from the rock to the formation point at 1.5 D (the 3 m rows and the animation's straight dye both show it is missing), and the version number for this addition (CHANGELOG "Unreleased"; Jeff decides). Start at `hydar/karman.py` (`locate_rock`, `_fit`) and `examples/09_benchmark_fish_rock.py`.
+- **Case study 5: distance depends on the wake-ageing model.** The fish's range comes from core growth and bed-friction decay, so a wrong eddy viscosity or roughness biases it by 1.3 to 2.8 m at 6 m; D is 23 to 29 % too large at 3 m (near wake). Untried: a fish that swims upstream along the found line, two surveys at different distances (ratio method), a body-bound flow model for the fish (it is a passive probe now), a near-wake model from the rock to the formation point at 1.5 D (the 3 m rows and the animation's straight dye both show it is missing). Start at `hydar/karman.py` (`locate_rock`, `_fit`) and `examples/09_benchmark_fish_rock.py`.
 - **New references unverified by Jeff (case study 5):** Chen & Jirka (1995, doi 10.1016/0169-5983(95)00053-G), Chow (1959), Liao et al. (2003, doi 10.1126/science.1088295), von Kármán (1911), Williamson (1996, doi 10.1146/annurev.fl.28.010196.002401).
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
+
+## 2026-11-15 — Case study 5 is released as v1.3.0; v1.2.0 is folded into it like v1.1.0
+
+**Decided** (Jeff: "Go ahead and update to 1.3"): version 1.3.0 in `pyproject.toml`, `hydar/__init__.py` and CITATION.cff (date 2026-11-15); the CHANGELOG "Unreleased" section becomes v1.3.0, and v1.2.0 is marked "prepared but not released on its own", as v1.1.0 was, since it was never tagged. README "How to cite" names v1.3.0 (this replaces the "case study 5 is unreleased" sentence of the entry below). CITATION, README and the badge keep the v1.0.0 DOI: Jeff will not archive v1.3.0 on Zenodo, as it is a minor release.
+**Rejected**: keeping v1.2.0 as a separate release before v1.3.0: it was never tagged, so a second release would only add a Zenodo version nobody cites. No tag or GitHub release is made by Claude sessions.
 
 ## 2026-11-15 — The README describes all five case studies; no numbers changed
 

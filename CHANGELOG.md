@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.3.0 (2026-11-15)
+
+Adds case study 5: a fish's lateral line finds a rock in a river from the rock's Kármán vortex street. v1.1.0 and v1.2.0 were prepared but not released on their own; v1.3.0 is the first release that contains them.
 
 ### Added
 
@@ -14,7 +16,7 @@
 
 ### Changed
 
-- README brought up to date with main: the introduction and a new case-study overview table cover all five case studies, the test count is 46 fast and 51 in all, the limitations describe the water of case studies 4 and 5, and "How to cite" says case study 5 is not yet in a release.
+- README brought up to date with main: the introduction and a new case-study overview table cover all five case studies, the test count is 46 fast and 51 in all, the limitations describe the water of case studies 4 and 5, and "How to cite" names v1.3.0.
 
 ### Case study 5 results
 
@@ -25,6 +27,8 @@
 | Distance | Median error 0.13 to 0.29 m at 6 to 9 m with the right wake model; biased by 1.3 to 2.8 m when the eddy viscosity or bed roughness of the true wake differ by a factor of 1.5 to 2; detection fails in half the runs at 12 m in 15 % turbulence |
 
 ## v1.2.0 (2026-11-14)
+
+Prepared but not released on its own; v1.3.0 is the first release that contains it.
 
 Applies the repository review of 2026-11-14 (`repository_review/`). The Kelvin method of case study 3 is retuned, so that the benchmark of case study 4 compares against a fair baseline, and the benchmark is rerun with 100 seeds. The results of case studies 3 and 4 change; the conclusions for the ferry are weaker than in v1.1.0 and are stated below.
 
@@ -60,7 +64,7 @@ Applies the repository review of 2026-11-14 (`repository_review/`). The Kelvin m
 
 ## v1.1.0 (2026-11-09)
 
-Prepared but not released on its own; v1.2.0 is the first release that contains it.
+Prepared but not released on its own; v1.3.0 is the first release that contains it.
 
 Adds case study 4: a method that designs the 3 × 3 array geometry for correlative interferometry and detects and tracks a vessel **without Kelvin wake theory**, with a Monte Carlo benchmark against the Kelvin methods of case studies 2 and 3.
 
