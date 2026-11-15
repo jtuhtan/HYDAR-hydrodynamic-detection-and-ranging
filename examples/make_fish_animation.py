@@ -11,10 +11,15 @@ run (the scenario of example 08 and Figure 8).
 Time: the street runs at SPEED times real time. The survey is shortened for
 the video: in the simulation the fish holds each of the 19 stations for 60 s.
 The water surface shows the street's pressure, exaggerated (the real surface
-moves by about 2 mm).
+moves by about 2 mm). The water is drawn translucent over the gravel bed, so the
+whole rock shows. Dye released at the rock's two flanks is carried by the
+river and rolled up by the street's vortices, as in a flume with dye
+injection; faint streaks across the river move with the current. The dye and
+the streaks are advected by the same kinematic street (velocity U plus the
+velocity the vortices induce) that gives the pressure.
 
 Run:   python examples/make_fish_animation.py [out_dir]
-Needs: ffmpeg on the PATH. Takes about 10 minutes.
+Needs: ffmpeg on the PATH. Takes about 15 minutes.
 """
 
 import os
@@ -72,6 +77,83 @@ RED = "#ff2a3c"
 P_REF = 15.0                      # Pa, pressure that saturates the glow
 
 
+# ---------------------------------------------------------------- dye and flow streaks
+DT_SIM = 0.1                       # s, advection step
+WARM = 45.0                        # s of street before the video starts, so the dye fills the view
+X_DROP = 17.0                      # particles leave the simulation here
+
+
+def velocity(x, y, ts):
+    """Velocity (u, v) [m/s] of the river plus the street at points (x, y), time ts."""
+    xv, yv, gv, rv = street.vortices(ts, rock.x + X_DROP + 4)
+    u = np.full(x.shape, street.U)
+    v = np.zeros(x.shape)
+    if xv.size:
+        yi, gi = street._with_images(yv, gv)
+        n = len(yi) // xv.size
+        xi, ri = np.tile(xv, n), np.tile(rv, n)
+        dx = x[:, None] - xi[None, :]
+        dy = y[:, None] - yi[None, :]
+        r2 = np.maximum(dx ** 2 + dy ** 2, 1e-12)
+        fac = gi / (2 * np.pi * r2) * (-np.expm1(-r2 / ri ** 2))
+        u = u - (fac * dy).sum(1)
+        v = v + (fac * dx).sum(1)
+    return u, v
+
+
+def advect_particles():
+    """Positions of dye (from the rock's flanks) and streak particles at every frame.
+
+    Returns dict kind -> (x, y, age) arrays of shape (n_frames, n_particles), NaN where absent.
+    """
+    rng = np.random.default_rng(5)
+    ts0 = survey.t[0, 0]
+    steps_per_frame = int(round(SPEED / FPS / DT_SIM))
+    n_warm = int(WARM / DT_SIM)
+    n_steps = n_warm + N_FRAMES * steps_per_frame
+    r_flank = 0.5 * rock.waterline_diameter(street.depth)
+    out = {}
+    for kind in ("dye", "streak"):
+        xs, ys, born = [], [], []
+        X = np.empty(0); Y = np.empty(0); B = np.empty(0); ID = np.empty(0, int)
+        nid = 0
+        rec = []
+        for k in range(n_steps):
+            ts = ts0 - WARM + k * DT_SIM
+            if kind == "dye":             # two dye ports on each flank, a little behind the widest point
+                nx = np.full(4, rock.x + 0.05) + rng.normal(0, 0.01, 4)
+                ny = rock.y + np.array([1, 1, -1, -1]) * (r_flank + np.array([0.03, 0.10, 0.03, 0.10]))
+                ny = ny + rng.normal(0, 0.008, 4)
+            elif k % 4 == 0:              # streaks: random points across the river, upstream
+                m = 5
+                nx = rng.uniform(-3.5, -3.0, m)
+                ny = rng.uniform(-0.5 * W + 0.05, 0.5 * W - 0.05, m)
+            else:
+                nx = ny = np.empty(0)
+            X = np.r_[X, nx]; Y = np.r_[Y, ny]; B = np.r_[B, np.full(nx.size, ts)]
+            ID = np.r_[ID, np.arange(nid, nid + nx.size)]; nid += nx.size
+            # midpoint (RK2) step, plus a little turbulent diffusion
+            u1, v1 = velocity(X, Y, ts)
+            u2, v2 = velocity(X + 0.5 * DT_SIM * u1, Y + 0.5 * DT_SIM * v1, ts + 0.5 * DT_SIM)
+            X = X + DT_SIM * u2 + rng.normal(0, 0.004, X.size)
+            Y = np.clip(Y + DT_SIM * v2 + rng.normal(0, 0.004, Y.size), -0.5 * W + 0.02, 0.5 * W - 0.02)
+            if kind == "streak":          # the rock is solid: streaks that hit it are dropped
+                keep = np.hypot(X - rock.x, Y - rock.y) > r_flank
+            else:
+                keep = np.ones(X.size, bool)
+            keep &= X < rock.x + X_DROP
+            X, Y, B, ID = X[keep], Y[keep], B[keep], ID[keep]
+            if k >= n_warm and (k - n_warm) % steps_per_frame == steps_per_frame - 1:
+                rec.append((ID.copy(), X.copy(), Y.copy(), ts + DT_SIM - B))
+        Xa = np.full((N_FRAMES, nid), np.nan); Ya = Xa.copy(); Aa = Xa.copy()
+        for i, (ids, x, y, a) in enumerate(rec[:N_FRAMES]):
+            Xa[i, ids], Ya[i, ids], Aa[i, ids] = x, y, a
+        used = ~np.all(np.isnan(Xa), axis=0)
+        out[kind] = (Xa[:, used], Ya[:, used], Aa[:, used])
+        print(f"  {kind}: {used.sum()} particles")
+    return out
+
+
 def ease(x):
     x = np.clip(x, 0.0, 1.0)
     return x * x * (3 - 2 * x)
@@ -120,18 +202,21 @@ def field(t, c, hx, hy, n=200):
     return X, Y, P
 
 
-def surface_colors(X, Y, P, hx, hy):
+def surface_colors(X, Y, P, hx, hy, ts):
     gx, gy = np.gradient(P, X[1, 0] - X[0, 0], Y[0, 1] - Y[0, 0])
     light = np.clip(0.5 + 0.02 * (-0.6 * gx - 0.8 * gy), 0, 1)
-    base = lerp(DEEP, NAVY, light[..., None])
+    base = lerp(DEEP, NAVY, light[..., None]) * 1.25
     glow = np.clip(-P / P_REF, 0, 1)[..., None] ** 1.1        # vortex cores: low pressure glows
     high = np.clip(P / P_REF, 0, 1)[..., None]
-    shimmer = 0.012 * (np.sin(17 * X + 6 * Y) * np.sin(9 * Y - 13 * X))[..., None]
+    xa = X - street.U * ts                                       # ripples drift with the current
+    shimmer = 0.016 * (np.sin(17 * xa + 6 * Y) * np.sin(9 * Y - 13 * xa))[..., None]
     col = base * (1 - 0.4 * high) + glow * (CYAN - base) + shimmer
     r = np.maximum(np.abs(X - X.mean()) / hx, np.abs(Y - Y.mean()) / hy)
     fade = np.clip((1.0 - r) / 0.10, 0, 1)[..., None]
     col = lerp(np.array([0.008, 0.016, 0.047]), col, fade)
-    return np.concatenate([np.clip(col, 0, 1), np.ones(P.shape + (1,))], axis=-1)
+    alpha = np.clip(0.34 + 0.55 * glow[..., 0] + 0.15 * high[..., 0], 0, 0.92) * fade[..., 0] \
+        + (1 - fade[..., 0])                                     # translucent water, opaque glow
+    return np.concatenate([np.clip(col, 0, 1), alpha[..., None]], axis=-1)
 
 
 def glow_line(ax, xs, ys, zs, color, width, alpha=1.0, layers=((6, .10), (3, .22), (1, 1.0)), zorder=6):
@@ -146,18 +231,37 @@ def glow_points(ax, x, y, z, color, size, alpha=1.0, zorder=7):
                    edgecolors="none", depthshade=False, zorder=zorder)
 
 
-def draw_rock(ax, zscale):
+def draw_rock(ax, zscale, above):
+    """The part of the hemisphere above (above=True) or below the water surface."""
     R = rock.radius
-    u, v = np.meshgrid(np.linspace(0, 2 * np.pi, 40), np.linspace(0, np.pi / 2, 14))
     h = street.depth
+    v0 = np.arcsin(h / R)                      # elevation angle of the waterline
+    v = np.linspace(v0, np.pi / 2, 10) if above else np.linspace(0, v0, 8)
+    u, v = np.meshgrid(np.linspace(0, 2 * np.pi, 40), v)
     zc = R * np.sin(v) - h                     # bed at -h, water surface at 0
-    keep = zc >= -0.02
     X = rock.x + R * np.cos(v) * np.cos(u)
     Y = rock.y + R * np.cos(v) * np.sin(u)
-    Z = np.where(keep, zc, np.nan) * zscale
     shade = 0.35 + 0.45 * np.clip(np.cos(u - 2.3) * np.cos(v) * 0.5 + np.sin(v) * 0.6, 0, 1)
-    cols = np.stack([shade * 0.55, shade * 0.57, shade * 0.62, np.ones_like(shade)], -1)
-    ax.plot_surface(X, Y, Z, facecolors=cols, shade=False, linewidth=0, antialiased=False, zorder=8)
+    tint = np.array([0.55, 0.57, 0.62]) if above else np.array([0.30, 0.42, 0.52])
+    cols = np.concatenate([shade[..., None] * tint, np.ones(shade.shape + (1,))], -1)
+    ax.plot_surface(X, Y, zc * zscale, facecolors=cols, shade=False, linewidth=0, antialiased=False,
+                    zorder=8 if above else 0.5)
+
+
+def draw_bed(ax, c, hx, hy, zscale):
+    """Gravel bed and the submerged bank slopes, seen through the water."""
+    h = street.depth
+    xs = np.linspace(c[0] - hx, c[0] + hx, 90)
+    ys = np.linspace(max(c[1] - hy, -0.5 * W), min(c[1] + hy, 0.5 * W), 40)
+    X, Y = np.meshgrid(xs, ys, indexing="ij")
+    Z = -np.asarray(channel.local_depth(Y.ravel())).reshape(Y.shape) * zscale
+    g = np.random.default_rng(2).random(X.shape)
+    lum = 0.55 + 0.45 * g
+    col = np.stack([0.09 * lum, 0.12 * lum, 0.15 * lum, np.ones_like(lum)], -1)
+    r = np.maximum(np.abs(X - c[0]) / hx, np.abs(Y - c[1]) / hy)
+    fade = np.clip((1.0 - r) / 0.30, 0, 1)[..., None]          # bed fades into the background
+    col[..., :3] = lerp(np.array([0.008, 0.016, 0.047]), col[..., :3], fade)
+    ax.plot_surface(X, Y, Z, facecolors=col, shade=False, linewidth=0, antialiased=False, zorder=0)
 
 
 def draw_banks(ax, c, hx, zscale):
@@ -188,6 +292,29 @@ def draw_fish(ax, y, z, amp, zoom):
         glow_points(ax, [xk], [y], [z], PURPLE, size * (0.6 + 1.6 * ak), alpha=0.4 + 0.6 * ak, zorder=11)
 
 
+def draw_particles(ax, i, c, hx, hy, zs, zoom):
+    """Dye from the rock (pale cyan) and flow streaks (short white dashes) at frame i."""
+    inside = lambda x, y: (np.abs(x - c[0]) < 0.97 * hx) & (np.abs(y - c[1]) < 0.97 * hy)
+    # streaks: a dash from where the particle was 3 frames ago
+    xs, ys, _ = PARTICLES["streak"]
+    j = max(i - (1 if zoom else 2), 0)
+    ok = ~np.isnan(xs[i]) & ~np.isnan(xs[j]) & inside(xs[i], ys[i]) & inside(xs[j], ys[j])
+    for x0, y0, x1, y1 in zip(xs[j, ok], ys[j, ok], xs[i, ok], ys[i, ok]):
+        ax.plot([x0, x1], [y0, y1], [0.6 * zs * 0.2] * 2, color="#dff4ff", lw=0.5, alpha=0.2, zorder=3)
+    # dye: fades as it spreads downstream
+    xd, yd, ad = PARTICLES["dye"]
+    ok = ~np.isnan(xd[i]) & inside(xd[i], yd[i])
+    if ok.any():
+        fade = np.clip(1.15 - ad[i, ok] / 40.0, 0.15, 1.0)
+        size = 1.6 if not zoom else 5.0
+        cols = np.zeros((ok.sum(), 4))
+        cols[:, :3] = [0.80, 0.97, 1.0]
+        ax.scatter(xd[i, ok], yd[i, ok], np.full(ok.sum(), 0.12 * zs), s=size * 5,
+                   color=np.c_[cols[:, :3], 0.05 * fade], edgecolors="none", depthshade=False, zorder=3)
+        ax.scatter(xd[i, ok], yd[i, ok], np.full(ok.sum(), 0.12 * zs), s=size,
+                   color=np.c_[cols[:, :3], 0.55 * fade], edgecolors="none", depthshade=False, zorder=4)
+
+
 def render(i, path):
     t = i / FPS
     c, hx, hy, elev, azim = camera(t)
@@ -204,18 +331,23 @@ def render(i, path):
     ax.set_box_aspect((hx / hy, 1, 0.7), zoom=1.45 if hx / hy < 1.3 else 1.3)
     ax.view_init(elev=elev, azim=azim)
 
+    ts = survey.t[0, 0] + SPEED * t
+    rock_in_view = abs(rock.x - c[0]) < hx + 0.6
+    draw_bed(ax, c, hx, hy, zscale)
+    if rock_in_view:
+        draw_rock(ax, zscale, above=False)
     X, Y, P = field(t, c, hx, hy)
     Z = zs * np.tanh(P / P_REF)
-    ax.plot_surface(X, Y, Z, facecolors=surface_colors(X, Y, P, hx, hy), shade=False,
+    ax.plot_surface(X, Y, Z, facecolors=surface_colors(X, Y, P, hx, hy, ts), shade=False,
                     rstride=1, cstride=1, linewidth=0, antialiased=False, zorder=1)
+    draw_particles(ax, i, c, hx, hy, zs, zoom)
     if not zoom:
         draw_banks(ax, c, hx, zscale * 1.0)
-    if abs(rock.x - c[0]) < hx + 0.6:
-        draw_rock(ax, zscale * 1.0)
+    if rock_in_view:
+        draw_rock(ax, zscale, above=True)
 
     # fish and its sensors, glowing with the pressure they feel
     y = fish_y(t)
-    ts = survey.t[0, 0] + SPEED * t
     pos = Fish(X_SNOUT, y).sensor_positions
     p_now = street.pressure(pos[:, 0], pos[:, 1], [ts])[:, 0]
     amp = np.clip(-p_now / P_REF, 0, 1)
@@ -271,7 +403,17 @@ def render(i, path):
     plt.close(fig)
 
 
+PARTICLES = None
+
+
+def setup():
+    global PARTICLES
+    print("advecting dye and flow streaks ...")
+    PARTICLES = advect_particles()
+
+
 def main():
+    setup()
     os.makedirs(OUT, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="hydar_fish_frames_")
     print(f"rendering {N_FRAMES} frames ...")
@@ -298,6 +440,7 @@ def main():
 
 if __name__ == "__main__":
     if os.environ.get("HYDAR_PREVIEW"):
+        setup()
         os.makedirs(OUT, exist_ok=True)
         for t in map(float, os.environ["HYDAR_PREVIEW"].split(",")):
             render(int(round(t * FPS)), os.path.join(OUT, f"preview_{t:05.2f}.png"))

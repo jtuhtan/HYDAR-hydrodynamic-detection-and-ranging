@@ -8,6 +8,7 @@
 - `examples/08_fish_rock.py` (about 10 s) and `examples/09_benchmark_fish_rock.py` (625 runs, about 30 minutes on 4 cores; results in `docs/data/fish_rock_benchmark.csv`).
 - README case study 5 with Figure 8 (`docs/make_figures.py 7`), 10 tests in `tests/test_karman.py`, and five references (Chen & Jirka 1995, Chow 1959, Liao et al. 2003, von Kármán 1911, Williamson 1996).
 - Case study 5 animation `docs/img/hydar_fish.gif` / `.mp4` (`examples/make_fish_animation.py`), rendered from a real survey in the style of the other animations.
+- The case study 5 animation shows the street being shed: dye released at the rock's flanks is advected by the street's velocity field and rolls up into its vortices, and the river is drawn translucent over a gravel bed with drifting ripples and flow streaks.
 - Figure 9 (`fig10_fish_rock_results`): the benchmark in seven panels (lateral, distance and diameter errors and detection rate against distance and turbulence; errors under a wrong wake model). The benchmark panels of Figure 8 moved there.
 - Results tables `docs/data/fish_rock_summary.md` (all 25 settings), written by the benchmark and rebuilt from the CSV with `examples/09_benchmark_fish_rock.py --summary`.
 
