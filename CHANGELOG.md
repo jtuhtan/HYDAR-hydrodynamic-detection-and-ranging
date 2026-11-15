@@ -12,6 +12,10 @@
 - Figure 9 (`fig10_fish_rock_results`): the benchmark in seven panels (lateral, distance and diameter errors and detection rate against distance and turbulence; errors under a wrong wake model). The benchmark panels of Figure 8 moved there.
 - Results tables `docs/data/fish_rock_summary.md` (all 25 settings), written by the benchmark and rebuilt from the CSV with `examples/09_benchmark_fish_rock.py --summary`.
 
+### Changed
+
+- README brought up to date with main: the introduction and a new case-study overview table cover all five case studies, the test count is 46 fast and 51 in all, the limitations describe the water of case studies 4 and 5, and "How to cite" says case study 5 is not yet in a release.
+
 ### Case study 5 results
 
 | Quantity | Result |

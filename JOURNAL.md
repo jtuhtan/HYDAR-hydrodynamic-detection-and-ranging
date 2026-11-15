@@ -32,6 +32,12 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
 
+## 2026-11-15 — The README describes all five case studies; no numbers changed
+
+**Decided** (Jeff: go through the README and make sure it is up to date): the introduction said "four parts" and described only waves from drops and boats; it now lists five parts (models, sources, sensors, localization, benchmarks) and a table that links the five case studies. The quick-start test count is 46 fast and 51 in all (was 36 and 41), the "Idealized water" limitation covers the wind sea of case study 4 and the river of case study 5, the Theory section mentions `SensorArray(layout=...)`, and "How to cite" says case study 5 is on main but unreleased.
+**Checked, unchanged**: example 8 rerun gives the README's values (f 0.0999 Hz, D 0.970 m, distance 5.99 m, y 0.39 m); the case study 5 tables agree with `docs/data/fish_rock_summary.md`; figure numbers 1 to 9 match `docs/make_figures.py`; version 1.2.0 and the v1.0.0 DOI stay until Jeff releases.
+**Rejected**: changing the version or the citation to anticipate the next release (Jeff's call), and rerunning benchmarks (no number was edited).
+
 ## 2026-11-15 — Case study 5 and the README limitations wording are on main; PR #6 was carried over, not merged
 
 **Decided** (Jeff: wrap up, commit and merge any remaining changes to main): case study 5 merged in three PRs (#7 code and benchmark, #8 animation, Figure 9 and results tables, #9 dye and translucent river in the animation). PR #6 (README limitations wording from the review thread) conflicted with the vortex-street bullet; its commit was cherry-picked onto `claude/project-thread-qmz92f` with both bullets kept and merged from there, so PR #6 itself can be closed unmerged.
