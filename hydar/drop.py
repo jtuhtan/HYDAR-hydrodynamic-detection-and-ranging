@@ -110,7 +110,10 @@ class DropObject:
 
     def _local_level(self, solver) -> float:
         """Mean water elevation in a ring just outside the sphere."""
-        eta = solver.eta[self._sl]
+        if hasattr(solver, "ex"):            # hydar.Solver: eta = ex + ey on the sphere's box only
+            eta = solver.ex[self._sl] + solver.ey[self._sl]
+        else:
+            eta = solver.eta[self._sl]
         dx = solver.grid.dx
         ring = (self._r2 > self.R ** 2) & (self._r2 <= (self.R + 2 * dx) ** 2)
         return float(eta[ring].mean()) if ring.any() else 0.0

@@ -35,10 +35,10 @@ This repository is a self-contained Python simulator for developing and testing 
 ```bash
 git clone https://github.com/jtuhtan/HYDAR-hydrodynamic-detection-and-ranging.git
 cd HYDAR-hydrodynamic-detection-and-ranging
-pip install -e ".[test]"
+pip install -e ".[test,fast]"               # "fast" (Numba) is optional: same results, faster solvers
 
-python examples/03_hydar_localization.py   # full pipeline, about 40 s
-pytest -m "not slow"                       # 46 fast tests, about 2 minutes (all 51 with plain pytest: about 5)
+python examples/03_hydar_localization.py   # full pipeline, about 10 s with Numba, 20 s without
+pytest -m "not slow"                       # 49 fast tests, about 1 minute (all 54 with plain pytest: about 3)
 ```
 
 ```python
@@ -82,6 +82,7 @@ plot_timeseries(arrays, fixes=result["fixes"])   # pressure time series of every
 | `examples/07_benchmark_interferometry.py` | Case study 4 benchmark: Monte Carlo comparison of interferometry and the Kelvin methods of case studies 2 and 3 for accuracy, precision and wind noise (about 30 minutes on 4 cores). Writes `docs/data/ci_benchmark.csv`. |
 | `examples/08_fish_rock.py` | Case study 5: a 25 cm fish with 10 lateral-line pressure sensors finds a rock in a trapezoidal river from the rock's Kármán vortex street (about 10 s). |
 | `examples/09_benchmark_fish_rock.py` | Case study 5 benchmark: 625 Monte Carlo surveys over distance, river turbulence and a wake model that differs from the fish's (about 30 minutes on 4 cores). Writes `docs/data/fish_rock_benchmark.csv` and the results tables `docs/data/fish_rock_summary.md` (`--summary` rebuilds the tables from the CSV). |
+| `examples/10_speed.py` | Times the hot paths (both solvers, a run of benchmark 09, the sidelobe search of array design, the ferry wake synthesis); run it with `HYDAR_NO_NUMBA=1` to time the NumPy-only path. |
 | `examples/make_fish_animation.py` | Renders the case study 5 animation from a real survey (Tu = 10 %, rock 0.4 m off the centreline, fish 6 m behind it; needs ffmpeg, about 15 minutes). The river is translucent over its gravel bed; dye released at the rock's flanks and faint streaks are carried by the same kinematic street, so the dye shows the vortices being shed from the rock. The inset builds the amplitude profile across the river station by station; the red laser ends at the HYDAR fix. |
 | `examples/make_boat_animation.py` | Renders the case study 2 animation from a full simulation (needs ffmpeg, about 15 minutes). Blue lines mark the Kelvin cusp lines. Each red laser ends where the fitted HYDAR track places the boat when the cusp line first reaches that array. |
 | `examples/make_hero_animation.py` | Renders the animation at the top of this page from a full simulation (needs ffmpeg, about 5 minutes). `hydar` computes the waves, arrival times and final fix; the drone and splash are decoration. |
@@ -487,12 +488,13 @@ hydar/
   locate.py     HYDAR: arrival picking, TDOA bearing, TOF range, multi-array fusion,
                 and boat tracking from the Kelvin or Mach wake (pick_wake, track_boat)
   plotting.py   time-series and map plots
-examples/       runnable scripts (01 to 09) and the three animations
+  _kernels.py   compiled inner loops (Numba, optional) with NumPy fallbacks that give the same numbers
+examples/       runnable scripts (01 to 10) and the three animations
 tests/          pytest suite (slow end-to-end tests are marked `slow`)
 docs/img/       figures used in this README
 docs/data/      benchmark results (case studies 4 and 5) and the case study 5 results tables
-repository_review/  dated whole-repository reviews with finding IDs and their status
-.github/workflows/  tests on every pull request, on the oldest and newest supported versions
+repository_review/  dated repository reviews (whole repository, and performance) with finding IDs and their status
+.github/workflows/  tests on every pull request: oldest supported versions (NumPy only), newest with Numba on Linux and Windows
 ```
 
 ## Author and contact

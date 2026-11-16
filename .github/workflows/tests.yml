@@ -10,18 +10,29 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: oldest supported
+          # NumPy only: the kernels in hydar/_kernels.py fall back to NumPy
+          - name: oldest supported, NumPy only
+            os: ubuntu-latest
             python: "3.9"
             deps: "numpy==1.22.* scipy==1.8.* matplotlib==3.5.*"
-          - name: latest
+          # with the optional accelerator (pip install hydar[fast])
+          - name: latest with Numba
+            os: ubuntu-latest
             python: "3.13"
-            deps: "numpy scipy matplotlib"
+            deps: "numpy scipy matplotlib numba"
+          - name: Windows, latest with Numba
+            os: windows-latest
+            python: "3.13"
+            deps: "numpy scipy matplotlib numba"
     name: ${{ matrix.name }} (Python ${{ matrix.python }})
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       # uv brings its own Python builds, so the oldest supported version stays
@@ -30,12 +41,14 @@ jobs:
         run: |
           pipx install uv
           uv venv --python ${{ matrix.python }} .venv
-          uv pip install --python .venv/bin/python ${{ matrix.deps }} pytest
-          uv pip install --python .venv/bin/python -e . --no-deps
-          .venv/bin/python -c "import sys, numpy, scipy, matplotlib; print(sys.version.split()[0], numpy.__version__, scipy.__version__, matplotlib.__version__)"
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python.exe; else PY=.venv/bin/python; fi
+          echo "PY=$PY" >> "$GITHUB_ENV"
+          uv pip install --python $PY ${{ matrix.deps }} pytest
+          uv pip install --python $PY -e . --no-deps
+          $PY -c "import sys, numpy, scipy, matplotlib; from hydar import _kernels; print(sys.version.split()[0], numpy.__version__, scipy.__version__, matplotlib.__version__, 'numba' if _kernels.HAVE_NUMBA else 'no numba')"
       - name: Fast tests
         if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
-        run: .venv/bin/python -m pytest -m "not slow"
+        run: $PY -m pytest -m "not slow"
       - name: All tests
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        run: .venv/bin/python -m pytest
+        run: $PY -m pytest

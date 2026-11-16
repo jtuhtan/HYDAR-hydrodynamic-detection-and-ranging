@@ -196,6 +196,9 @@ class HemisphereRock:
 
 
 # ----------------------------------------------------------------- the street
+_S_FAR = 50.0     # r^2 / rc^2 beyond which a Lamb-Oseen core's pressure is exactly that of a point vortex
+
+
 def lamb_oseen_pressure(r, gamma, rc, rho: float = RHO) -> np.ndarray:
     """Pressure of a Lamb-Oseen vortex relative to far away [Pa] (cyclostrophic balance).
 
@@ -203,7 +206,16 @@ def lamb_oseen_pressure(r, gamma, rc, rho: float = RHO) -> np.ndarray:
     at the centre it is -rho Gamma^2 ln 2 / (4 pi^2 rc^2).
     """
     s = np.maximum(np.asarray(r, dtype=float) ** 2 / rc ** 2, 1e-12)
-    F = np.expm1(-s) ** 2 / s + 2 * (exp1(s) - exp1(2 * s))     # (1 - e^-s)^2 / s + ...
+    F = np.expm1(-s) ** 2 / s                                   # (1 - e^-s)^2 / s + ...
+    # 2 (E1(s) - E1(2 s)) < 2 e^-s / s is below half an ulp of F once s > 40 (tested to
+    # 1e3), so beyond s = 50 adding it cannot change F; the special function is evaluated
+    # only for the few points near a core, which makes the street several times faster.
+    near = s <= _S_FAR
+    if near.all():
+        F = F + 2 * (exp1(s) - exp1(2 * s))
+    elif near.any():
+        sn = s[near]
+        F[near] += 2 * (exp1(sn) - exp1(2 * sn))
     return -rho * gamma ** 2 / (8 * np.pi ** 2 * rc ** 2) * F
 
 

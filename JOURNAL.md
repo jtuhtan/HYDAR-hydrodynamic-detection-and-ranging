@@ -7,6 +7,7 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 
 ## Open threads
 
+- **Speed: what is left** (`repository_review/2026-11-16-performance-review.md`, section 5). Changes that keep results only to rounding or change them, so Jeff decides: two fewer FFTs per spectral step by linearity (about 15 %), single-precision FFTs (about 2x), `numba.prange` threads in the shallow-water loop (bitwise identical, but competes with the benchmark process pools), the vortex street over all times at once, and `wavenumber` stopping on convergence (4 instead of 50 Newton iterations). The Monte Carlo runs of benchmark 07, the largest remaining cost, were not profiled in depth.
 - **Zenodo for minor releases.** Jeff (2026-11-15): v1.3.0 gets a GitHub release but no new Zenodo
   version, as it is a minor release; README, CITATION.cff and the badge keep the v1.0.0 DOI
   10.5281/zenodo.23881055. If the Zenodo GitHub integration is switched on for the repository, publishing
@@ -33,6 +34,16 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 - **New references unverified by Jeff (case study 5):** Chen & Jirka (1995, doi 10.1016/0169-5983(95)00053-G), Chow (1959), Liao et al. (2003, doi 10.1126/science.1088295), von Kármán (1911), Williamson (1996, doi 10.1146/annurev.fl.28.010196.002401).
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
+
+## 2026-11-16 — The solvers are faster with unchanged results; Numba, not Rust or Fortran, is the accelerator
+
+**Decided** (Jeff: review the current version, make the calculations and the numerical solver more efficient, maybe with Rust and/or Fortran): profile first, then speed up only what keeps the results bitwise identical, so the committed benchmark CSVs still reproduce. Review in `repository_review/2026-11-16-performance-review.md`. Changes: the shallow-water step is one compiled loop with Numba (0.7 instead of 8.1 ms per step on 460 x 460) and in-place NumPy without it (4.0 ms); `SpectralSolver` caches the depth factor per sensor depth, fuses the mode update and skips FFTs of an all-zero pressure (1.35x for the boat); `lamb_oseen_pressure` evaluates E1 only where r^2/rc^2 <= 50 (a run of benchmark 09 1.7x); `peak_sidelobe` uses one matrix product for all source directions (`design_array` 4x, same designs). Numba is an optional extra (`hydar[fast]`), off with `HYDAR_NO_NUMBA=1`; `hydar/_kernels.py` keeps a NumPy fallback for every kernel. CI gains a Windows job and runs with and without Numba. Fast tests: 118 s → about 50 s.
+**Rejected**:
+- Rust (PyO3, maturin): built and timed for the shallow-water step, 0.70 ms per step against Numba's 0.69, both bitwise identical to NumPy. The step is memory bound, so the language does not matter; Rust would add a toolchain and a compiled wheel per platform and Python version. Worth reconsidering only for processing on a sensor node, not for the simulator.
+- Fortran (f2py, meson): not built (no compiler in the container); expected to tie with the others, and the hardest of the three to build on Windows.
+- Compiled code for the spectral solver: about 75 % of a step is FFTs that already run in SciPy's multi-threaded C++.
+- `cos(ph) @ A` in `KelvinShip.wake` (2.3x): it changes the wake by 2e-16 m and the ferry benchmark CSV in the 9th digit; not worth losing bit-for-bit reproducibility for 50 s.
+**Confirmed by**: hot paths compared array by array with main (fish benchmark run, street pressure, `design_array`, 300 boat steps with sensors, shallow-water solver with and without a sphere, unforced spectral solver): bitwise identical, with and without Numba. A partial benchmark 07 run (ferry, 2 seeds) writes a byte-identical CSV. 49 fast and 5 slow tests pass.
 
 ## 2026-11-15 — Case study 5 is released as v1.3.0; v1.2.0 is folded into it like v1.1.0
 

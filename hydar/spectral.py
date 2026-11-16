@@ -52,6 +52,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import fft as sfft
 
+from ._kernels import oscillate
 from .sensors import depth_attenuation
 from .solver import G, Grid
 
@@ -99,7 +100,8 @@ class SpectralSolver:
         self._phi = np.zeros((gr.nx, gr.ny))
         self._P = np.zeros((gr.nx, gr.ny))                         # P/(rho g) [m]
         self._a_hat = None                                         # last eta_k + P_k/(rho g)
-        self._zcache: dict = {}
+        self._zcache: dict = {}                                    # pressure head at depth z, this step
+        self._kz: dict = {}                                        # depth_attenuation(k, z), fixed
 
     def _sponge(self) -> np.ndarray:
         gr, n = self.grid, self.grid.n_pml
@@ -140,15 +142,24 @@ class SpectralSolver:
         self.objects.append(obj)
 
     # ---------------------------------------------------------- forcing
-    def _pressure(self, t: float) -> np.ndarray:
-        P = np.zeros((self.grid.nx, self.grid.ny))
+    def _pressure(self, t: float):
+        """Applied P/(rho g) on the grid at time t, or None where nothing presses on the water."""
+        P = None
         for obj in self.objects:
             if hasattr(obj, "pressure_head"):
                 out = obj.pressure_head(self, t)
                 if out is not None:
                     sl, val = out
+                    if P is None:
+                        P = np.zeros((self.grid.nx, self.grid.ny))
                     P[sl] += val
         return P
+
+    def _filtered_hat(self, P):
+        """Smoothed spectrum of P; zeros without forcing (the FFT of zeros is exactly zero)."""
+        if P is None:
+            return np.zeros(self.k.shape, dtype=complex)
+        return sfft.rfft2(P, workers=_WORKERS) * self._filter
 
     # ---------------------------------------------------------- stepping
     def step(self) -> None:
@@ -160,17 +171,22 @@ class SpectralSolver:
                     "support (it is forced by surface pressure only); use hydar.Solver for it")
         dt = self.dt
         Pm = self._pressure(self.t + 0.5 * dt)
-        Pm_hat = sfft.rfft2(Pm, workers=_WORKERS) * self._filter
-        a = sfft.rfft2(self._eta, workers=_WORKERS) + Pm_hat
-        f = sfft.rfft2(self._phi, workers=_WORKERS)
-        a_new = a * self._cos + f * self._K_over_w * self._sin
-        f_new = f * self._cos - a * self._w_over_K * self._sin
+        Pm_hat = self._filtered_hat(Pm)
+        # a = eta_k + Pm_k and phi_k turn as a harmonic oscillator over dt:
+        #   a' = a cos(w dt) + phi_k (K/w) sin(w dt),  phi_k' = phi_k cos(w dt) - a (g/w) sin(w dt)
+        e_hat, f = oscillate(sfft.rfft2(self._eta, workers=_WORKERS),
+                             sfft.rfft2(self._phi, workers=_WORKERS), Pm_hat,
+                             self._cos, self._sin, self._K_over_w, self._w_over_K)
         shape = (self.grid.nx, self.grid.ny)
-        self._eta = sfft.irfft2(a_new - Pm_hat, s=shape, workers=_WORKERS) * self._damp
-        self._phi = sfft.irfft2(f_new, s=shape, workers=_WORKERS) * self._damp
+        self._eta = sfft.irfft2(e_hat, s=shape, workers=_WORKERS)
+        self._eta *= self._damp
+        self._phi = sfft.irfft2(f, s=shape, workers=_WORKERS)
+        self._phi *= self._damp
         P_end = self._pressure(self.t + dt)
-        self._P = sfft.irfft2(sfft.rfft2(P_end, workers=_WORKERS) * self._filter, s=shape,
-                              workers=_WORKERS)
+        if P_end is None:
+            self._P = np.zeros(shape)
+        else:
+            self._P = sfft.irfft2(self._filtered_hat(P_end), s=shape, workers=_WORKERS)
         self._a_hat = None
         self._zcache = {}
         self.t += dt
@@ -184,7 +200,9 @@ class SpectralSolver:
             return self._zcache[z]
         if self._a_hat is None:
             self._a_hat = sfft.rfft2(self._eta + self._P, workers=_WORKERS)
-        Kz = depth_attenuation(self.k, z, self.depth)
+        Kz = self._kz.get(z)
+        if Kz is None:                       # the factor depends only on z: compute it once
+            Kz = self._kz[z] = depth_attenuation(self.k, z, self.depth)
         out = sfft.irfft2(self._a_hat * Kz, s=(self.grid.nx, self.grid.ny), workers=_WORKERS)
         self._zcache[z] = out
         return out

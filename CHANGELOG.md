@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+Faster solvers and calculations with unchanged results (`repository_review/2026-11-16-performance-review.md`).
+
+### Changed
+
+- The shallow-water `Solver` step runs as one compiled loop when Numba is installed (11 times faster, 0.7 instead of 8.1 ms per step on a 460 x 460 grid) and in place in NumPy otherwise (2 times faster); both give bitwise the same results as before.
+- `SpectralSolver`: the depth factor of each sensor depth is computed once instead of every step, the mode update is one fused loop with Numba, and an all-zero pressure field is not transformed (1.35 times faster for the boat of case study 2; bitwise the same).
+- `lamb_oseen_pressure` evaluates the exponential integrals only near a vortex core, where they can change the result (a run of benchmark 09 is 1.7 times faster; bitwise the same).
+- `peak_sidelobe` computes the patterns of all source directions from one matrix product (`design_array` 4 times faster; the same designs, and the benchmark 07 CSV is byte-identical).
+
+### Added
+
+- Optional extra `hydar[fast]` (Numba); `HYDAR_NO_NUMBA=1` switches it off. `hydar/_kernels.py` holds the kernels and their NumPy fallbacks; `tests/test_kernels.py` checks that both are bitwise equal to the original expressions.
+- `examples/10_speed.py` times the hot paths.
+- CI runs on Windows too, and with and without Numba.
+
 ## v1.3.0 (2026-11-15)
 
 Adds case study 5: a fish's lateral line finds a rock in a river from the rock's Kármán vortex street. v1.1.0 and v1.2.0 were prepared but not released on their own; v1.3.0 is the first release that contains them.

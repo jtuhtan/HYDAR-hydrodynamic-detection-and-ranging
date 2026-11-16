@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ._kernels import ShallowWaterKernel
+
 G = 9.81
 
 
@@ -130,6 +132,8 @@ class Solver:
         self._ay, self._by = ay[None, :], by[None, :]
         self._aux, self._bux = aux[1:-1, None], bux[1:-1, None]
         self._avy, self._bvy = avy[None, 1:-1], bvy[None, 1:-1]
+        self._kernel = ShallowWaterKernel(gr.nx, gr.ny, self._aux, self._bux, self._avy, self._bvy,
+                                          self._ax, self._bx, self._ay, self._by)
 
         self.objects: list = []
 
@@ -152,20 +156,21 @@ class Solver:
     def step(self) -> None:
         """Advance one time step dt."""
         dx, dt = self.grid.dx, self.dt
-        eta = self.ex + self.ey
-
-        self.u[1:-1, :] = self._aux * self.u[1:-1, :] - self._bux * self.g * (eta[1:] - eta[:-1]) / dx
-        self.v[:, 1:-1] = self._avy * self.v[:, 1:-1] - self._bvy * self.g * (eta[:, 1:] - eta[:, :-1]) / dx
-
-        h = self.depth
-        self.ex = self._ax * self.ex - self._bx * h * (self.u[1:] - self.u[:-1]) / dx
-        self.ey = self._ay * self.ey - self._by * h * (self.v[:, 1:] - self.v[:, :-1]) / dx
+        # u, v from the gradient of eta = ex + ey, then ex, ey from the divergence:
+        #   u = aux u - bux g d(eta)/dx,  ex = ax ex - bx h du/dx  (and v, ey along y);
+        # in place, compiled with Numba when it is installed (hydar._kernels)
+        for name in ("ex", "ey", "u", "v"):
+            a = getattr(self, name)
+            if not (a.flags.c_contiguous and a.flags.writeable and a.dtype == np.float64):
+                setattr(self, name, np.array(a, dtype=float, order="C"))
+        self._kernel(self.ex, self.ey, self.u, self.v, self.g, self.depth, dx)
 
         for obj in self.objects:
             q = obj.source(self)
             if q is not None:
-                self.ex += 0.5 * dt * q
-                self.ey += 0.5 * dt * q
+                hq = 0.5 * dt * q
+                self.ex += hq
+                self.ey += hq
         self.t += dt
         for obj in self.objects:
             if hasattr(obj, "advance"):
@@ -190,11 +195,11 @@ class Solver:
         for k in range(n):
             self.step()
             times[k] = self.t
-            eta = self.ex + self.ey
+            ex, ey = self.ex, self.ey
             for m, (i, j) in enumerate(idx):
-                rec[k, m] = eta[i, j]
+                rec[k, m] = ex[i, j] + ey[i, j]
             if snapshot_every and (k + 1) % snapshot_every == 0:
-                snaps.append(eta[si, sj].copy())
+                snaps.append(ex[si, sj] + ey[si, sj])
                 snap_t.append(self.t)
             if callback:
                 callback(self)
