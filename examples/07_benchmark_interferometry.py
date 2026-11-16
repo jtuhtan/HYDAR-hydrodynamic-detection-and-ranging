@@ -17,7 +17,7 @@ phases, frequencies and directions) and of the sensor noise are added to the
 same wake. Wind is added linearly to the recorded wake (linear theory). Every
 geometry and method sees the same seeds, so runs can be compared in pairs.
 
-Run:  python examples/07_benchmark_interferometry.py            (100 seeds, about 30 min on 4 cores)
+Run:  python examples/07_benchmark_interferometry.py            (100 seeds, about 20 min on 4 cores)
       N_SEEDS=5 python examples/07_benchmark_interferometry.py ferry      (a quick partial run)
 
 The full run writes docs/data/ci_benchmark.csv. A partial run (one case only,
@@ -161,7 +161,8 @@ def run_boat(job):
 def boat_records(layouts):
     """One dispersive-solver run with every geometry's arrays (sensors are passive)."""
     grid = Grid(lx=120.0, ly=50.0, dx=0.125, n_pml=80)
-    sim = SpectralSolver(grid, depth=B_DEPTH, dt=0.01)
+    # single precision: 2.5 times faster, records within 5e-5 of double (0.03 Pa against 2 Pa noise)
+    sim = SpectralSolver(grid, depth=B_DEPTH, dt=0.01, precision="single")
     arrays = {g: [SensorArray(n, x, y, z=z, pressure_model="solver", layout=lay) for n, x, y, z in B_SPEC]
               for g, lay in layouts.items()}
     for arrs in arrays.values():

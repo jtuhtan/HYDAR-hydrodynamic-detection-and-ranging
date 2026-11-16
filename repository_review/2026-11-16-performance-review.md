@@ -124,3 +124,21 @@ These keep the results only to rounding (about 1e-15) or change them, so they ne
 |---|---|---|
 | 07 interferometry (100 seeds) | about 30 min on 4 cores | about 27 min: the boat solver run (4.3 → 3.2 min) and array design (2.6 → 0.7 min) are faster; the wake synthesis (1.4 min) and the Monte Carlo runs are not |
 | 09 fish and rock (25 seeds) | about 25 min on 4 cores | about 15 min |
+
+## 7. Second round: speed-ups that change the numbers (Jeff chose "More speed, numbers shift", 2026-11-16)
+
+| Change | Speed (measured) | Effect on results |
+|---|---|---|
+| `numba.prange` over rows in the shallow-water step | 0.69 → 0.17 ms per step (48x v1.3.0) | none: bitwise identical (rows are independent) |
+| `SpectralSolver`: sensors reuse rfft2(eta) and the pressure spectrum (linearity); P on the grid only on request | 2 of 11 FFTs per step saved; boat without sensors 25 → 16 ms per step | to 1e-18 m (rounding of the sum) |
+| `SpectralSolver(precision="single")`, used by benchmark 07 | boat with 4 arrays 41 → 16.5 ms per step (2.5x) | sensor records 5e-5 relative, at most 2.6e-6 m = 0.025 Pa (sensor noise 2 Pa) over the 44 s run |
+| Vortex street as one Numba loop with its own E1 (series below 1, continued fraction above) | a run of benchmark 09 10.0 → 3.4 s (2.9x v1.3.0) | 6e-14 Pa on 26 Pa; the benchmark's rounded CSV is byte-identical |
+| `KelvinShip.wake`: `cos(ph) @ A` | 2.3x | 2e-16 m |
+| `wavenumber` stops Newton at round-off (4 to 6 instead of 50 iterations) | small | to round-off |
+
+Both benchmarks were rerun in full on 4 cores:
+
+- **Benchmark 07:** 21.5 min (it was quoted as about 30). The CSV changes in the last digits. Medians move by about 1e-5 m. A few boat runs in wind (H_s 0.1 m and more), where `track_boat` or the interferometry fit sit between two solutions, jump to the other one: by up to 143° in course and 608 m in track error. No run gains or loses a fix. Every ferry cell of the summary table is unchanged. Four cells of the README's boat table moved: calm 1 m interferometry median 0.73 → 0.72 m; H_s 0.05 m optimal interferometry course bias +0.86 → +0.85°; H_s 0.1 m Kelvin course bias +26.1 ± 61.1 → +24.7 ± 61.7° and speed SD 2.06 → 2.05 m/s. In the seed-by-seed comparison of boat geometries, the H_s 0.05 m median difference moved from −0.13 to −0.12 m (p 0.131 → 0.132). No conclusion changes. Figure 7 was not regenerated; its changes are far below a line width.
+- **Benchmark 09:** 7.5 min (it was about 25). The CSV and the results tables are byte-identical.
+
+The library default stays `precision="double"`. Only benchmark 07 switches to single precision, where the change is 80 times below the sensor noise.

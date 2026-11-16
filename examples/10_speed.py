@@ -34,8 +34,9 @@ def shallow_water():
     return lambda: [sim.step() for _ in range(50)], 50, sim.ex.shape
 
 
-def spectral_boat():
-    sim = SpectralSolver(Grid(lx=120.0, ly=50.0, dx=0.125, n_pml=80), depth=3.0, dt=0.01)
+def spectral_boat(precision="double"):
+    kw = {} if precision == "double" else {"precision": precision}
+    sim = SpectralSolver(Grid(lx=120.0, ly=50.0, dx=0.125, n_pml=80), depth=3.0, dt=0.01, **kw)
     sim.add(Boat(hull=Series60Hull(length=4.5), ramp=4.0, speed=3.0, x=-8.0, y=22.0, heading_deg=4.0))
     return lambda: [sim.step() for _ in range(10)], 10, sim.eta.shape
 
@@ -69,6 +70,7 @@ except ImportError:            # v1.3.0 and older have no compiled kernels
 print(f"hydar {hydar.__version__} from {hydar.__file__}; Numba {'on' if HAVE_NUMBA else 'off'}")
 for name, make, unit in (("shallow-water Solver", shallow_water, "step"),
                          ("SpectralSolver with boat", spectral_boat, "step"),
+                         ("  same, single precision", lambda: spectral_boat("single"), "step"),
                          ("benchmark 09, one run", fish_job, "run"),
                          ("peak_sidelobe", sidelobe, "call"),
                          ("KelvinShip.wake", kelvin, "call")):

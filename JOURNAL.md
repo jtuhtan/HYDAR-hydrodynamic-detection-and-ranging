@@ -7,7 +7,7 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 
 ## Open threads
 
-- **Speed: what is left** (`repository_review/2026-11-16-performance-review.md`, section 5). Changes that keep results only to rounding or change them, so Jeff decides: two fewer FFTs per spectral step by linearity (about 15 %), single-precision FFTs (about 2x), `numba.prange` threads in the shallow-water loop (bitwise identical, but competes with the benchmark process pools), the vortex street over all times at once, and `wavenumber` stopping on convergence (4 instead of 50 Newton iterations). The Monte Carlo runs of benchmark 07, the largest remaining cost, were not profiled in depth.
+- **Speed: what is left** (`repository_review/2026-11-16-performance-review.md`, sections 5 and 7). Done on 2026-11-16: fewer FFTs, single precision (benchmark 07 only), threads, the vortex street loop, `wavenumber`. Left: the Monte Carlo runs of benchmark 07 (now most of its 21 min), not profiled in depth. The boat fits in wind H_s >= 0.1 m flip between two solutions under tiny perturbations (2026-11-16 entry).
 - **Zenodo for minor releases.** Jeff (2026-11-15): v1.3.0 gets a GitHub release but no new Zenodo
   version, as it is a minor release; README, CITATION.cff and the badge keep the v1.0.0 DOI
   10.5281/zenodo.23881055. If the Zenodo GitHub integration is switched on for the repository, publishing
@@ -34,6 +34,12 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 - **New references unverified by Jeff (case study 5):** Chen & Jirka (1995, doi 10.1016/0169-5983(95)00053-G), Chow (1959), Liao et al. (2003, doi 10.1126/science.1088295), von Kármán (1911), Williamson (1996, doi 10.1146/annurev.fl.28.010196.002401).
 - **New references unverified by Jeff:** Fischler & Bolles (1981, doi 10.1145/358669.358692), Lighthill
   (1978), Van Trees (2002, doi 10.1002/0471221104) in README References. Jeff said "fine for now".
+
+## 2026-11-16 — A second round of speed-ups changes results slightly; both benchmarks rerun, no conclusion changes
+
+**Decided** (Jeff chose "More speed, numbers shift" after PR #12 merged): threads in the shallow-water loop (`numba.prange`, bitwise identical, 0.17 ms per step); two FFTs fewer per spectral step by linearity; `SpectralSolver(precision="single")`, used only by benchmark 07 (2.5x, boat records within 5e-5 relative, 0.025 Pa at most); the vortex street as one Numba loop with its own E1 (to 1e-14); `cos(ph) @ A` in `KelvinShip.wake` (the change rejected in the entry below for bit-for-bit reproducibility, now accepted); `wavenumber` stops at round-off. Benchmark 07 rerun in full (21.5 min): ferry summary cells unchanged; four boat cells in the README moved (calm interferometry median 0.73 to 0.72 m, H_s 0.05 m optimal course bias +0.86 to +0.85°, H_s 0.1 m Kelvin course bias +26.1 ± 61.1 to +24.7 ± 61.7°, speed SD 2.06 to 2.05 m/s). A few boat runs in wind H_s >= 0.1 m jump between two fit solutions (up to 143° and 608 m); no run gains or loses a fix. Benchmark 09 rerun in full (7.5 min, was about 25): CSV and tables byte-identical.
+**Rejected**: single precision as the library default: keep "double" so that library users get the old numbers unless they ask; regenerating Figure 7 (changes far below a line width).
+**Open**: the boat runs in wind that flip between two solutions under 1e-5 perturbations say those fits are ill-conditioned; the medians and fix counts are stable, the means and 90th percentiles of the Kelvin method at H_s >= 0.1 m are not.
 
 ## 2026-11-16 — The solvers are faster with unchanged results; Numba, not Rust or Fortran, is the accelerator
 
