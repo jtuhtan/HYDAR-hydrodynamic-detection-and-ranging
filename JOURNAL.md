@@ -7,6 +7,7 @@ new entry that names it, plus one line "*Superseded by the YYYY-MM-DD entry*" un
 
 ## Open threads
 
+- **GitHub repository description is out of date (Jeff to edit).** It still names only drops and boats ("shallow-water and dispersive wave solvers, drop tests and Kelvin wake boat tracking"); it should also mention ship localization, correlative interferometry (case study 4) and the fish finding a rock from its Kármán vortex street (case study 5). Only Jeff can change it, on the repository page.
 - **Speed: what is left** (`repository_review/2026-11-16-performance-review.md`, sections 5 and 7). Done on 2026-11-16: fewer FFTs, single precision (benchmark 07 only), threads, the vortex street loop, `wavenumber`. Left: the Monte Carlo runs of benchmark 07 (now most of its 21 min), not profiled in depth. The boat fits in wind H_s >= 0.1 m flip between two solutions under tiny perturbations (2026-11-16 entry).
 - **Zenodo for minor releases.** Jeff (2026-11-15): v1.3.0 gets a GitHub release but no new Zenodo
   version, as it is a minor release; README, CITATION.cff and the badge keep the v1.0.0 DOI
