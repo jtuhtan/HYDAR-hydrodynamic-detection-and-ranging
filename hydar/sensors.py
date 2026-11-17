@@ -48,11 +48,15 @@ def wavenumber(omega: np.ndarray, h: float, g: float = 9.81) -> np.ndarray:
     omega = np.abs(np.asarray(omega, dtype=float))
     k = np.maximum(omega / np.sqrt(g * h), omega ** 2 / g)  # good first guess
     k = np.where(k == 0, 1e-12, k)
-    for _ in range(50):  # Newton iterations
+    for _ in range(50):  # Newton iterations; quadratic, so 4 to 6 usually reach round-off
         th = np.tanh(k * h)
         f = g * k * th - omega ** 2
         df = g * th + g * k * h * (1 - th ** 2)
-        k = np.maximum(k - f / df, 1e-12)
+        k_new = np.maximum(k - f / df, 1e-12)
+        done = np.all(np.abs(k_new - k) <= 4 * np.finfo(float).eps * k_new)
+        k = k_new
+        if done:
+            break
     return np.where(omega == 0, 0.0, k)
 
 

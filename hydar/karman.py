@@ -89,6 +89,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 from scipy.special import exp1
 
+from ._kernels import street_pressure
 from .sensors import SensorArray
 
 G = 9.81
@@ -337,16 +338,7 @@ class KarmanStreet:
         yi, gi = self._with_images(yv, gv)
         xi = np.tile(xv, len(yi) // n_real)
         ri = np.tile(rv, len(yi) // n_real)
-        dx = x[:, None] - xi[None, :]
-        dy = y[:, None] - yi[None, :]
-        r2 = np.maximum(dx ** 2 + dy ** 2, 1e-12)
-        fac = gi / (2 * np.pi * r2) * (-np.expm1(-r2 / ri ** 2))    # u_theta / r
-        ux, uy = -fac * dy, fac * dx
-        Ux, Uy = ux.sum(1), uy.sum(1)
-        self_sq = (ux[:, :n_real] ** 2 + uy[:, :n_real] ** 2).sum(1)
-        p_lo = lamb_oseen_pressure(np.sqrt(r2[:, :n_real]), gv, rv, self.rho).sum(1)
-        return (-self.rho * (self.U - self.Uc) * Ux
-                - 0.5 * self.rho * (Ux ** 2 + Uy ** 2 - self_sq) + p_lo)
+        return street_pressure(x, y, xi, yi, gi, ri, n_real, self.rho, self.U - self.Uc, _S_FAR)
 
     def harmonic_profile(self, dx: float, y_rel, n_phase: int = 32) -> tuple:
         """Amplitude [Pa] of the f and 2 f components at a distance dx behind the rock.

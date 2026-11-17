@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Faster solvers and calculations with unchanged results (`repository_review/2026-11-16-performance-review.md`).
+Faster solvers and calculations (`repository_review/2026-11-16-performance-review.md`): a first round with bitwise unchanged results, and a second that changes them to rounding or slightly.
 
 ### Changed
 
@@ -10,6 +10,9 @@ Faster solvers and calculations with unchanged results (`repository_review/2026-
 - `SpectralSolver`: the depth factor of each sensor depth is computed once instead of every step, the mode update is one fused loop with Numba, and an all-zero pressure field is not transformed (1.35 times faster for the boat of case study 2; bitwise the same).
 - `lamb_oseen_pressure` evaluates the exponential integrals only near a vortex core, where they can change the result (a run of benchmark 09 is 1.7 times faster; bitwise the same).
 - `peak_sidelobe` computes the patterns of all source directions from one matrix product (`design_array` 4 times faster; the same designs, and the benchmark 07 CSV is byte-identical).
+
+- Second round, which changes results to rounding or slightly (Jeff, 2026-11-16: "More speed, numbers shift"): the shallow-water loop runs on all cores (`numba.prange`; 0.17 ms per step, 48 times v1.3.0, still bitwise the same); `SpectralSolver` does two FFTs fewer per step by linearity (sensors reuse the spectrum of eta and the spectrum of the pressure) and has `precision="single"` (float32, 2.5 times faster with sensors; the boat records move by 5e-5 relative, at most 0.03 Pa, against 2 Pa sensor noise), which benchmark 07 now uses; the vortex street is one compiled loop with its own E1 (to 1e-14; a run of benchmark 09 takes 3.4 instead of 10 s); `KelvinShip.wake` sums real cosines (2.3 times faster; 2e-16 m); `wavenumber` stops its Newton iterations at round-off.
+- Benchmark 07 rerun in full (21.5 min on 4 cores): `docs/data/ci_benchmark.csv` changes in the last digits; every ferry cell of the summary tables is unchanged, and four cells of the boat table in the README moved by one in the last digit shown or less than 6 % (calm interferometry median 0.73 to 0.72 m; H_s 0.05 m optimal course bias +0.86 to +0.85°; H_s 0.1 m Kelvin course bias +26.1 ± 61.1 to +24.7 ± 61.7° and speed SD 2.06 to 2.05 m/s). Figure 7 was not regenerated; the change is far below a line width. Benchmark 09 rerun in full (7.5 instead of about 25 min on 4 cores): its CSV and results tables are byte-identical.
 
 ### Added
 

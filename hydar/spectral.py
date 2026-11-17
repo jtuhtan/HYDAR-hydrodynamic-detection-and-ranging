@@ -68,6 +68,8 @@ class SpectralSolver:
     dt        : time step [s] (default 0.01 s, i.e. 100 Hz)
     sigma_max : damping rate at the outer edge of the sponge [1/s]
     smooth    : Gaussian smoothing length of the applied pressure, in cells
+    precision : "double" (float64) or "single" (float32 fields and FFTs, about
+                twice as fast; relative change of the results of order 1e-6)
     """
 
     grid: Grid
@@ -77,11 +79,16 @@ class SpectralSolver:
     smooth: float = 1.0
     g: float = G
     rho: float = 1000.0
+    precision: str = "double"
     t: float = field(init=False, default=0.0)
     objects: list = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         gr = self.grid
+        if self.precision not in ("double", "single"):
+            raise ValueError("precision must be 'double' or 'single'")
+        self._real = np.float64 if self.precision == "double" else np.float32
+        self._cplx = np.complex128 if self.precision == "double" else np.complex64
         kx = 2 * np.pi * sfft.fftfreq(gr.nx, gr.dx)
         ky = 2 * np.pi * sfft.rfftfreq(gr.ny, gr.dx)
         KX, KY = np.meshgrid(kx, ky, indexing="ij")
@@ -95,10 +102,15 @@ class SpectralSolver:
             self._w_over_K = np.where(self.omega > 0, self.g / self.omega, 0.0)
         self._filter = np.exp(-0.5 * (self.k * self.smooth * gr.dx) ** 2)
         self._damp = np.exp(-self._sponge() * self.dt)
+        if self.precision == "single":
+            for name in ("_cos", "_sin", "_K_over_w", "_w_over_K", "_filter", "_damp"):
+                setattr(self, name, getattr(self, name).astype(np.float32))
         self.c = float(np.sqrt(self.g * self.depth))              # longest-wave speed
-        self._eta = np.zeros((gr.nx, gr.ny))
-        self._phi = np.zeros((gr.nx, gr.ny))
-        self._P = np.zeros((gr.nx, gr.ny))                         # P/(rho g) [m]
+        self._eta = np.zeros((gr.nx, gr.ny), self._real)
+        self._phi = np.zeros((gr.nx, gr.ny), self._real)
+        self._P = None                                             # P/(rho g) [m], made on request
+        self._P_hat = None                                         # its spectrum; None: no forcing
+        self._eta_hat = None                                       # spectrum of the current eta
         self._a_hat = None                                         # last eta_k + P_k/(rho g)
         self._zcache: dict = {}                                    # pressure head at depth z, this step
         self._kz: dict = {}                                        # depth_attenuation(k, z), fixed
@@ -124,13 +136,25 @@ class SpectralSolver:
 
     def set_eta(self, eta: np.ndarray) -> None:
         """Set an initial surface elevation (full grid), fluid at rest."""
-        self._eta = np.array(eta, dtype=float)
+        self._eta = np.array(eta, dtype=self._real)
         self._phi[...] = 0.0
+        self._eta_hat = self._a_hat = None
+        self._zcache = {}
 
     @property
     def surface_pressure_head(self) -> np.ndarray:
         """Applied surface pressure P/(rho g) [m] at the current time."""
+        if self._P is None:
+            shape = (self.grid.nx, self.grid.ny)
+            self._P = (np.zeros(shape, self._real) if self._P_hat is None
+                       else sfft.irfft2(self._P_hat, s=shape, workers=_WORKERS))
         return self._P
+
+    def _spectrum_eta(self):
+        """rfft2 of the current eta, computed once per step (sensors and the next step share it)."""
+        if self._eta_hat is None:
+            self._eta_hat = sfft.rfft2(self._eta, workers=_WORKERS)
+        return self._eta_hat
 
     def add(self, obj) -> None:
         """Attach an object.
@@ -158,8 +182,8 @@ class SpectralSolver:
     def _filtered_hat(self, P):
         """Smoothed spectrum of P; zeros without forcing (the FFT of zeros is exactly zero)."""
         if P is None:
-            return np.zeros(self.k.shape, dtype=complex)
-        return sfft.rfft2(P, workers=_WORKERS) * self._filter
+            return np.zeros(self.k.shape, dtype=self._cplx)
+        return sfft.rfft2(P.astype(self._real, copy=False), workers=_WORKERS) * self._filter
 
     # ---------------------------------------------------------- stepping
     def step(self) -> None:
@@ -174,7 +198,7 @@ class SpectralSolver:
         Pm_hat = self._filtered_hat(Pm)
         # a = eta_k + Pm_k and phi_k turn as a harmonic oscillator over dt:
         #   a' = a cos(w dt) + phi_k (K/w) sin(w dt),  phi_k' = phi_k cos(w dt) - a (g/w) sin(w dt)
-        e_hat, f = oscillate(sfft.rfft2(self._eta, workers=_WORKERS),
+        e_hat, f = oscillate(self._spectrum_eta(),
                              sfft.rfft2(self._phi, workers=_WORKERS), Pm_hat,
                              self._cos, self._sin, self._K_over_w, self._w_over_K)
         shape = (self.grid.nx, self.grid.ny)
@@ -182,11 +206,12 @@ class SpectralSolver:
         self._eta *= self._damp
         self._phi = sfft.irfft2(f, s=shape, workers=_WORKERS)
         self._phi *= self._damp
+        # P at the end of the step is kept as a spectrum: sensors need eta_k + P_k, and
+        # P on the grid is only transformed back if surface_pressure_head asks for it
         P_end = self._pressure(self.t + dt)
-        if P_end is None:
-            self._P = np.zeros(shape)
-        else:
-            self._P = sfft.irfft2(self._filtered_hat(P_end), s=shape, workers=_WORKERS)
+        self._P_hat = None if P_end is None else self._filtered_hat(P_end)
+        self._P = None
+        self._eta_hat = None
         self._a_hat = None
         self._zcache = {}
         self.t += dt
@@ -198,11 +223,12 @@ class SpectralSolver:
         """Dynamic pressure head p_dyn/(rho g) [m] at depth z (< 0) on the grid."""
         if z in self._zcache:
             return self._zcache[z]
-        if self._a_hat is None:
-            self._a_hat = sfft.rfft2(self._eta + self._P, workers=_WORKERS)
+        if self._a_hat is None:      # eta_k + P_k by linearity, from spectra already at hand
+            e = self._spectrum_eta()
+            self._a_hat = e if self._P_hat is None else e + self._P_hat
         Kz = self._kz.get(z)
         if Kz is None:                       # the factor depends only on z: compute it once
-            Kz = self._kz[z] = depth_attenuation(self.k, z, self.depth)
+            Kz = self._kz[z] = depth_attenuation(self.k, z, self.depth).astype(self._real)
         out = sfft.irfft2(self._a_hat * Kz, s=(self.grid.nx, self.grid.ny), workers=_WORKERS)
         self._zcache[z] = out
         return out

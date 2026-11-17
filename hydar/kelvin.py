@@ -112,7 +112,9 @@ class KelvinShip:
                 jj = idx[j0:j0 + chunk]
                 ph = k[None, :] * (xs[jj, None] * np.cos(th)[None, :]
                                    + np.abs(ys[jj, None]) * np.sin(th)[None, :])
-                out[i, jj] = norm * np.real(np.exp(1j * ph) @ A) * dth
+                # A is real, so Re(exp(i ph) @ A) = cos(ph) @ A: half the work of the
+                # complex exponential and a real instead of a complex product
+                out[i, jj] = norm * (np.cos(ph) @ A) * dth
         return out
 
 

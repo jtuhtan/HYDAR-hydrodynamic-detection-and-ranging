@@ -58,3 +58,37 @@ def test_numba_oscillator_is_bitwise_identical():
     out = K._oscillate_numba(e.copy(), f.copy(), p, *args)
     for r, o in zip(ref, out):
         assert np.array_equal(r, o)
+
+
+@pytest.mark.skipif(not K.HAVE_NUMBA, reason="numba not installed")
+def test_numba_street_matches_numpy_to_rounding():
+    from hydar.karman import HemisphereRock, KarmanStreet, TrapezoidalChannel
+    ch = TrapezoidalChannel()
+    st = KarmanStreet(ch, HemisphereRock.from_protrusion(ch, 0.0, 0.2))
+    x, y = np.linspace(0.5, 12, 40), np.linspace(-1.5, 1.5, 40)
+    for t in (3.0, 17.5):
+        xv, yv, gv, rv = st.vortices(t, 20.0)
+        yi, gi = st._with_images(yv, gv)
+        xi, ri = np.tile(xv, len(yi) // xv.size), np.tile(rv, len(yi) // xv.size)
+        args = (x, y, xi, yi, gi, ri, xv.size, st.rho, st.U - st.Uc)
+        ref = K._street_numpy(*args)
+        assert np.allclose(K._street_numba(*args, 50.0), ref, rtol=1e-12, atol=1e-12 * np.abs(ref).max())
+
+
+def test_single_precision_spectral_solver_is_close_to_double():
+    out = {}
+    for prec in ("double", "single"):
+        sim = SpectralSolver(Grid(lx=20.0, ly=16.0, dx=0.1, n_pml=30), depth=2.0, dt=0.01, precision=prec)
+        X, Y = np.meshgrid(sim.grid.x, sim.grid.y, indexing="ij")
+        sim.set_eta(0.05 * np.exp(-((X - 10) ** 2 + (Y - 8) ** 2) / 0.5))
+        sim.run(2.0)
+        out[prec] = sim.eta.astype(float), sim.pressure_head(-0.5).astype(float)
+    for d, s in zip(out["double"], out["single"]):
+        assert np.abs(s - d).max() < 1e-4 * np.abs(d).max()
+
+
+def test_wavenumber_stops_at_round_off():
+    from hydar.sensors import wavenumber
+    w = 2 * np.pi * np.linspace(0.0, 5.0, 501)
+    k = wavenumber(w, 3.0)
+    assert np.allclose(9.81 * k * np.tanh(3.0 * k), w ** 2, rtol=1e-13, atol=1e-13)

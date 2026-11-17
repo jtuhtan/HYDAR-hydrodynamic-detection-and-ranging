@@ -59,18 +59,19 @@ def _sw_step_numpy(ex, ey, u, v, aux, bux, avy, bvy, ax, bx, ay, by, g, h, dx, w
 
 
 if HAVE_NUMBA:
-    @_nb.njit(cache=True)
+    @_nb.njit(cache=True, parallel=True)
     def _sw_step_numba(ex, ey, u, v, aux, bux, avy, bvy, ax, bx, ay, by, g, h, dx):
+        # rows are independent within each sweep, so the threads (prange) change no number
         nx, ny = ex.shape
-        for i in range(1, nx):
+        for i in _nb.prange(1, nx):
             a, b = aux[i - 1], bux[i - 1]
             for j in range(ny):
                 u[i, j] = a * u[i, j] - b * g * ((ex[i, j] + ey[i, j]) - (ex[i - 1, j] + ey[i - 1, j])) / dx
-        for i in range(nx):
+        for i in _nb.prange(nx):
             for j in range(1, ny):
                 v[i, j] = (avy[j - 1] * v[i, j]
                            - bvy[j - 1] * g * ((ex[i, j] + ey[i, j]) - (ex[i, j - 1] + ey[i, j - 1])) / dx)
-        for i in range(nx):
+        for i in _nb.prange(nx):
             a, b = ax[i], bx[i]
             for j in range(ny):
                 ex[i, j] = a * ex[i, j] - b * h * (u[i + 1, j] - u[i, j]) / dx
@@ -131,3 +132,84 @@ def oscillate(e_hat, f, Pm_hat, cos, sin, K_over_w, w_over_K):
     if HAVE_NUMBA:
         return _oscillate_numba(e_hat, f, Pm_hat, cos, sin, K_over_w, w_over_K)
     return _oscillate_numpy(e_hat, f, Pm_hat, cos, sin, K_over_w, w_over_K)
+
+
+# ------------------------------------------------------------- vortex street
+_EULER = 0.5772156649015329
+
+
+def _street_numpy(x, y, xi, yi, gi, ri, n_real, rho, dU):
+    """Pressure of a Kármán street with bank images at points (x, y) (see KarmanStreet)."""
+    from .karman import lamb_oseen_pressure
+    dx = x[:, None] - xi[None, :]
+    dy = y[:, None] - yi[None, :]
+    r2 = np.maximum(dx ** 2 + dy ** 2, 1e-12)
+    fac = gi / (2 * np.pi * r2) * (-np.expm1(-r2 / ri ** 2))    # u_theta / r
+    ux, uy = -fac * dy, fac * dx
+    Ux, Uy = ux.sum(1), uy.sum(1)
+    self_sq = (ux[:, :n_real] ** 2 + uy[:, :n_real] ** 2).sum(1)
+    p_lo = lamb_oseen_pressure(np.sqrt(r2[:, :n_real]), gi[:n_real], ri[:n_real], rho).sum(1)
+    return -rho * dU * Ux - 0.5 * rho * (Ux ** 2 + Uy ** 2 - self_sq) + p_lo
+
+
+if HAVE_NUMBA:
+    @_nb.njit(cache=True)
+    def _e1(x):
+        """Exponential integral E1(x), x > 0, to about 1e-15 (series below 1, continued fraction above)."""
+        if x <= 1.0:
+            term, total, k = 1.0, 0.0, 1
+            while True:
+                term *= -x / k
+                d = -term / k
+                total += d
+                if abs(d) < 1e-17 * abs(total) or k > 60:
+                    break
+                k += 1
+            return -np.log(x) - _EULER + total
+        # modified Lentz for E1(x) = e^-x / (x + 1 / (1 + 1 / (x + 2 / (1 + 2 / (x + ...)))))
+        b = x + 1.0
+        c = 1.0 / 1e-300
+        d = 1.0 / b
+        h = d
+        for i in range(1, 200):
+            an = -float(i) * i
+            b += 2.0
+            d = 1.0 / (an * d + b)
+            c = b + an / c
+            de = c * d
+            h *= de
+            if abs(de - 1.0) < 1e-16:
+                break
+        return h * np.exp(-x)
+
+    @_nb.njit(cache=True)
+    def _street_numba(x, y, xi, yi, gi, ri, n_real, rho, dU, s_far):
+        n, m = x.size, xi.size
+        out = np.empty(n)
+        c0 = 1.0 / (8 * np.pi ** 2)
+        for p in range(n):
+            Ux = Uy = self_sq = p_lo = 0.0
+            for q in range(m):
+                dx = x[p] - xi[q]
+                dy = y[p] - yi[q]
+                r2 = max(dx * dx + dy * dy, 1e-12)
+                fac = gi[q] / (2 * np.pi * r2) * (-np.expm1(-r2 / ri[q] ** 2))
+                ux, uy = -fac * dy, fac * dx
+                Ux += ux
+                Uy += uy
+                if q < n_real:
+                    self_sq += ux * ux + uy * uy
+                    s = max(r2 / ri[q] ** 2, 1e-12)
+                    F = np.expm1(-s) ** 2 / s
+                    if s <= s_far:
+                        F += 2 * (_e1(s) - _e1(2 * s))
+                    p_lo += -rho * gi[q] ** 2 * c0 / ri[q] ** 2 * F
+            out[p] = -rho * dU * Ux - 0.5 * rho * (Ux * Ux + Uy * Uy - self_sq) + p_lo
+        return out
+
+
+def street_pressure(x, y, xi, yi, gi, ri, n_real, rho, dU, s_far=50.0):
+    """Street pressure [Pa] at points (x, y); vortices (xi, yi, gi, ri), the first n_real real."""
+    if HAVE_NUMBA:
+        return _street_numba(x, y, xi, yi, gi, ri, n_real, rho, dU, s_far)
+    return _street_numpy(x, y, xi, yi, gi, ri, n_real, rho, dU)

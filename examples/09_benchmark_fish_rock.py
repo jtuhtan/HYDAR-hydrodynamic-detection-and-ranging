@@ -12,7 +12,7 @@ shedding phase and random turbulence and sensor noise for every seed.
              ratio, eddy viscosity of the cores and roughness of the bed.
              This measures how much the answer rests on the wake model.
 
-Run:  python examples/09_benchmark_fish_rock.py              (25 seeds, about 25 min on 4 cores)
+Run:  python examples/09_benchmark_fish_rock.py              (25 seeds, about 8 min on 4 cores)
       N_SEEDS=3 python examples/09_benchmark_fish_rock.py    (a quick partial run)
       python examples/09_benchmark_fish_rock.py --summary    (tables from the saved CSV only)
 
